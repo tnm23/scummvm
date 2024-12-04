@@ -407,6 +407,20 @@ struct Rect {
 			rect.bottom -= bottom - clip.bottom;
 		return !rect.isEmpty();
 	}
+
+	/**
+	 * Return a Point indicating the top left of the rectangle
+	 */	
+	Point origin() {
+	  return Point(left,top);
+	}
+		/**
+	 * Return a Point indicating the centroid of the rectangle
+	 * @note The center point is rounded up and left when width and/or height are odd
+	 */
+  Point center() {
+    return Point((left+right)/2, (bottom+top)/2);
+  }	
 };
 
 /** @} */
