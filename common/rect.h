@@ -411,14 +411,14 @@ struct Rect {
 	/**
 	 * Return a Point indicating the top left of the rectangle
 	 */	
-	Point origin() {
+	Point origin() const {
 	  return Point(left,top);
 	}
 		/**
 	 * Return a Point indicating the centroid of the rectangle
 	 * @note The center point is rounded up and left when width and/or height are odd
 	 */
-  Point center() {
+  Point center() const {
     return Point((left+right)/2, (bottom+top)/2);
   }	
 };
