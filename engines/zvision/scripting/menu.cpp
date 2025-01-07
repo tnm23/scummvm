@@ -52,7 +52,7 @@ MenuManager::MenuManager(ZVision *engine, const Common::Rect menuArea, const Men
 	}
 	for (int i = 0; i < 4; i++)
     buttonAnim[i] = new LinearScroller(_params.activeFrame,_params.idleFrame,_params.buttonPeriod);
-	menuFocus.push_back(kFocusNone);
+	setFocus(kFocusNone); //Ensure focus list is initialised
 	mainArea = Common::Rect(_params.wMain,hMainMenu);
 	mainArea.moveTo(menuOrigin+mainScroller.Pos);
 }
@@ -204,20 +204,9 @@ void MenuManager::redrawMain() {
   clean = false;
 }
 
+
 void MenuManager::setFocus(int8 currentFocus) {
-  if(menuFocus.front() != currentFocus) {
-    Common::Array<int8> _menuFocus;
-    while(menuFocus.size() > 0) {
-      if(menuFocus.back() != currentFocus)
-        _menuFocus.push_back(menuFocus.back());
-      menuFocus.pop_back();
-    }
-    menuFocus.push_back(currentFocus);
-    while(_menuFocus.size() > 0) {
-      menuFocus.push_back(_menuFocus.back());
-      _menuFocus.pop_back();
-    }
-  }
+  menuFocus.set(currentFocus);
   assert(menuFocus.size() <= 4);
 }
 
