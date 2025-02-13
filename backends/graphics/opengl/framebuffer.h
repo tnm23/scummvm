@@ -26,6 +26,8 @@
 
 #include "math/matrix4.h"
 
+#include "common/rotationmode.h"
+
 namespace OpenGL {
 
 class Pipeline;
@@ -147,7 +149,7 @@ public:
 	/**
 	 * Set the size of the target buffer.
 	 */
-	virtual bool setSize(uint width, uint height) = 0;
+	virtual bool setSize(uint width, uint height, Common::RotationMode rotation) = 0;
 
 	/**
 	 * Accessor to activate framebuffer for pipeline.
@@ -183,14 +185,14 @@ public:
 	/**
 	 * Set the size of the back buffer.
 	 */
-	bool setSize(uint width, uint height) override;
+	bool setSize(uint width, uint height, Common::RotationMode rotation) override;
 
 protected:
 	void activateInternal() override;
 };
 
 #if !USE_FORCED_GLES
-class GLTexture;
+class Texture;
 
 /**
  * Render to texture framebuffer implementation.
@@ -216,18 +218,18 @@ public:
 	/**
 	 * Set size of the texture target.
 	 */
-	bool setSize(uint width, uint height) override;
+	bool setSize(uint width, uint height, Common::RotationMode rotation) override;
 
 	/**
 	 * Query pointer to underlying GL texture.
 	 */
-	GLTexture *getTexture() const { return _texture; }
+	Texture *getTexture() const { return _texture; }
 
 protected:
 	void activateInternal() override;
 
 private:
-	GLTexture *_texture;
+	Texture *_texture;
 	GLuint _glFBO;
 	bool _needUpdate;
 };

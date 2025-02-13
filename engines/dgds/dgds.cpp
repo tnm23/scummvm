@@ -62,7 +62,10 @@
 #include "dgds/scripts.h"
 #include "dgds/sound.h"
 #include "dgds/game_palettes.h"
-#include "dgds/dragon_arcade.h"
+#include "dgds/minigames/dragon_arcade.h"
+#include "dgds/minigames/china_tank.h"
+#include "dgds/minigames/china_train.h"
+#include "dgds/hoc_intro.h"
 
 // for frame contents debugging
 //#define DUMP_FRAME_DATA 1
@@ -81,14 +84,18 @@ const byte DgdsEngine::HOC_CHAR_SWAP_ICONS[] = { 0, 20, 21, 22 };
 DgdsEngine::DgdsEngine(OSystem *syst, const ADGameDescription *gameDesc)
 	: Engine(syst), _fontManager(nullptr), _console(nullptr), _inventory(nullptr),
 	_soundPlayer(nullptr), _decompressor(nullptr), _scene(nullptr), _shellGame(nullptr),
-	_gdsScene(nullptr), _resource(nullptr), _gamePals(nullptr), _gameGlobals(nullptr),
-	_detailLevel(kDgdsDetailHigh), _textSpeed(1), _justChangedScene1(false), _justChangedScene2(false),
+	_hocIntro(nullptr), _gdsScene(nullptr), _resource(nullptr), _gamePals(nullptr), _gameGlobals(nullptr),
+	_detailLevel(kDgdsDetailHigh), _textSpeed(1), _justChangedScene1(false),
 	_random("dgds"), _currentCursor(-1), _menuToTrigger(kMenuNone), _isLoading(true), _flipMode(false),
 	_rstFileName(nullptr), _difficulty(1), _menu(nullptr), _adsInterp(nullptr), _isDemo(false),
-	_dragonArcade(nullptr) {
-	syncSoundSettings();
+	_dragonArcade(nullptr), _chinaTank(nullptr), _chinaTrain(nullptr), _isAltDlgColors(false),
+	_gameId(GID_INVALID), _thisFrameMs(0), _lastGlobalFade(-1), _lastGlobalFadedPal(0),
+	_debugShowHotAreas(false), _lastMouseEvent(Common::EVENT_INVALID) {
 
 	_platform = gameDesc->platform;
+	_gameLang = gameDesc->language;
+	_isEGA = (gameDesc->flags & ADGF_DGDS_EGA);
+	_isAltDlgColors = (gameDesc->flags & ADGF_DGDS_ALT_DIALOG_COLORS);
 
 	if (!strcmp(gameDesc->gameId, "rise")) {
 		_gameId = GID_DRAGON;
@@ -105,6 +112,9 @@ DgdsEngine::DgdsEngine(OSystem *syst, const ADGameDescription *gameDesc)
 	} else if (!strcmp(gameDesc->gameId, "comingattractions")) {
 		_isDemo = true;
 		_gameId = GID_COMINGATTRACTIONS;
+	} else if (!strcmp(gameDesc->gameId, "castaway")) {
+		_isDemo = true;
+		_gameId = GID_CASTAWAY;
 	} else {
 		error("Unknown game ID");
 	}
@@ -121,12 +131,17 @@ DgdsEngine::~DgdsEngine() {
 	delete _resource;
 	delete _scene;
 	delete _gdsScene;
+	delete _gameGlobals;
 	delete _soundPlayer;
 	delete _fontManager;
 	delete _menu;
+	delete _adsInterp;
 	delete _inventory;
 	delete _shellGame;
+	delete _hocIntro;
 	delete _dragonArcade;
+	delete _chinaTank;
+	delete _chinaTrain;
 
 	_icons.reset();
 	_corners.reset();
@@ -155,7 +170,11 @@ void DgdsEngine::loadIcons() {
 bool DgdsEngine::changeScene(int sceneNum) {
 	assert(_scene && _adsInterp);
 
-	if (sceneNum == _scene->getNum()) {
+	debug(1, "CHANGE SCENE %d -> %d (clock %s)", _scene->getNum(), sceneNum, _clock.dump().c_str());
+
+	// Willy Beamish relies on this resetting the scene when picking up the
+	// coin in the fountain (scene 56)
+	if (sceneNum == _scene->getNum() && getGameId() != GID_WILLY) {
 		warning("Tried to change from scene %d to itself, doing nothing.", sceneNum);
 		return false;
 	}
@@ -167,9 +186,15 @@ bool DgdsEngine::changeScene(int sceneNum) {
 	}
 
 	const Common::String sceneFile = Common::String::format("S%d.SDS", sceneNum);
-	if (!_resource->hasResource(sceneFile)) {
+	bool haveSceneFile = _resource->hasResource(sceneFile);
+	if (!haveSceneFile && sceneNum != 2) {
 		warning("Tried to switch to non-existent scene %d", sceneNum);
 		return false;
+	} else if (!haveSceneFile && getGameId() == GID_WILLY) {
+		// Willy does not have a separate scene file for inventory.
+		// Leave the currenty scene data loaded and just show the inventory.
+		_inventory->open();
+		return true;
 	}
 
 	_gameGlobals->setLastSceneNum(sceneNum);
@@ -193,21 +218,26 @@ bool DgdsEngine::changeScene(int sceneNum) {
 
 	_scene->unload();
 	_backgroundFile.clear();
-	_soundPlayer->unloadMusic();
 	_soundPlayer->stopAllSfx();
 
 	_gdsScene->runChangeSceneOps();
 
-	if (!_scene->getDragItem())
-		setMouseCursor(_gdsScene->getDefaultMouseCursor());
+	if (!_scene->getDragItem()) {
+		int16 cursorNum = (getGameId() == GID_WILLY) ? kDgdsMouseWait : kDgdsMouseGameDefault;
+		setMouseCursor(cursorNum);
+	}
 
 	_storedAreaBuffer.fillRect(Common::Rect(SCREEN_WIDTH, SCREEN_HEIGHT), 0);
 
-	_scene->load(sceneFile, _resource, _decompressor);
+	if (haveSceneFile)
+		_scene->load(sceneFile, _resource, _decompressor);
+	else
+		_scene->setSceneNum(sceneNum);
+
 	// These are done inside the load function in the original.. cleaner here..
-	if (!_isDemo)
+	if (!_isDemo && getGameId() != GID_WILLY)
 		_scene->addInvButtonToHotAreaList();
-	if (_gameId == GID_DRAGON)
+	if (getGameId() == GID_DRAGON)
 		_clock.setVisibleScript(true);
 
 	if (_scene->getMagic() != _gdsScene->getMagic())
@@ -221,25 +251,33 @@ bool DgdsEngine::changeScene(int sceneNum) {
 	else
 		_adsInterp->unload();
 
+	debug(1, "%s", _scene->dump("").c_str());
 	_scene->runEnterSceneOps();
-	debug("%s", _scene->dump("").c_str());
 
 	_justChangedScene1 = true;
-	_justChangedScene2 = true;
 
 	return true;
 }
 
-void DgdsEngine::setMouseCursor(uint num) {
-	if (!_icons || (int)num >= _icons->loadedFrameCount())
+void DgdsEngine::setMouseCursor(int num) {
+	if (num == kDgdsMouseGameDefault)
+		num = _gdsScene->getDefaultMouseCursor();
+	else if (num == kDgdsMouseWait)
+		num = _gdsScene->getDefaultMouseCursor2();
+	else if (num == kDgdsMouseLook)
+		num = _gdsScene->getOtherDefaultMouseCursor();
+
+	if (!_icons || num >= _icons->loadedFrameCount())
 		return;
 
-	if ((int)num == _currentCursor)
+	if (num == _currentCursor) {
+		CursorMan.showMouse(true);
 		return;
+	}
 
 	const Common::Array<MouseCursor> &cursors = _gdsScene->getCursorList();
 
-	if (num >= cursors.size())
+	if (num >= (int)cursors.size())
 		error("Not enough cursor info, need %d have %d", num, cursors.size());
 
 	_currentCursorHot = cursors[num].getHot();
@@ -319,6 +357,11 @@ void DgdsEngine::init(bool restarting) {
 		delete _menu;
 		delete _adsInterp;
 		delete _inventory;
+		delete _dragonArcade;
+		delete _shellGame;
+		delete _hocIntro;
+		delete _chinaTank;
+		delete _chinaTrain;
 	}
 
 	_gamePals = new GamePalettes(_resource, _decompressor);
@@ -329,10 +372,14 @@ void DgdsEngine::init(bool restarting) {
 	_menu = new Menu();
 	_adsInterp = new ADSInterpreter(this);
 	_inventory = new Inventory();
-	if (_gameId == GID_DRAGON)
+	if (getGameId() == GID_DRAGON)
 		_dragonArcade = new DragonArcade();
-	else if (_gameId == GID_HOC)
+	else if (getGameId() == GID_HOC) {
 		_shellGame = new ShellGame();
+		_hocIntro = new HocIntro();
+		_chinaTank = new ChinaTank();
+		_chinaTrain = new ChinaTrain();
+	}
 
 	_backgroundBuffer.create(SCREEN_WIDTH, SCREEN_HEIGHT, Graphics::PixelFormat::createFormatCLUT8());
 	_storedAreaBuffer.create(SCREEN_WIDTH, SCREEN_HEIGHT, Graphics::PixelFormat::createFormatCLUT8());
@@ -356,19 +403,20 @@ void DgdsEngine::loadGameFiles() {
 		_gdsScene->load("DRAGON.GDS", _resource, _decompressor);
 		_rstFileName = "DRAGON.RST";
 
-		debug("%s", _gdsScene->dump("").c_str());
+		debug(1, "%s", _gdsScene->dump("").c_str());
 
 		loadCorners("DCORNERS.BMP");
 		reqParser.parse(&invRequestData, "DINV.REQ");
 		reqParser.parse(&vcrRequestData, "DVCR.REQ");
 		break;
 	case GID_HOC:
+		_soundPlayer->loadSFX("SOUNDS1.SNG");
 		_gameGlobals = new HocGlobals(_clock);
 		_gamePals->loadPalette("HOC.PAL");
 		_gdsScene->load("HOC.GDS", _resource, _decompressor);
 		_rstFileName = "HOC.RST";
 
-		debug("%s", _gdsScene->dump("").c_str());
+		debug(1, "%s", _gdsScene->dump("").c_str());
 
 		loadCorners("HCORNERS.BMP");
 		reqParser.parse(&invRequestData, "HINV.REQ");
@@ -376,6 +424,9 @@ void DgdsEngine::loadGameFiles() {
 		break;
 	case GID_WILLY:
 		_gameGlobals = new WillyGlobals(_clock);
+		_soundPlayer->loadSFX("WILLYSND.SX");
+		_soundPlayer->loadMusic("WILLYMUS.SX");
+
 		if (_resource->hasResource("WILLY.GDS")) {
 			_gdsScene->load("WILLY.GDS", _resource, _decompressor);
 			_rstFileName = "WILLY.RST";
@@ -388,10 +439,12 @@ void DgdsEngine::loadGameFiles() {
 			loadCorners("SOWCORNERS.BMP");
 		}
 
-		debug("%s", _gdsScene->dump("").c_str());
+		debug(1, "%s", _gdsScene->dump("").c_str());
 
 		reqParser.parse(&invRequestData, "WINV.REQ");
 		reqParser.parse(&vcrRequestData, "WVCR.REQ");
+		if (!_isDemo)
+			_menu->readRESData("WVCR.RES");
 
 		break;
 	case GID_QUARKY:
@@ -399,7 +452,7 @@ void DgdsEngine::loadGameFiles() {
 		_gamePals->loadPalette("MRALLY.PAL");
 		_gdsScene->load("MRALLY.GDS", _resource, _decompressor);
 
-		debug("%s", _gdsScene->dump("").c_str());
+		debug(1, "%s", _gdsScene->dump("").c_str());
 
 		loadCorners("MCORNERS.BMP");
 		reqParser.parse(&invRequestData, "TOOLINFO.REQ");
@@ -417,6 +470,12 @@ void DgdsEngine::loadGameFiles() {
 		_adsInterp->load("DEMO.ADS");
 		_adsInterp->segmentOrState(1, 3);
 		break;
+	case GID_CASTAWAY:
+		_gameGlobals = new Globals(_clock);
+		_gamePals->loadPalette("JOHNCAST.PAL");
+		_adsInterp->load("JOHNNY.ADS");
+		_adsInterp->segmentOrState(1, 3);
+		break;
 	default:
 		error("Unsupported game type in loadGameFiles");
 	}
@@ -424,13 +483,13 @@ void DgdsEngine::loadGameFiles() {
 	_gdsScene->runStartGameOps();
 	loadIcons();
 	_gdsScene->initIconSizes();
-	setMouseCursor(_gdsScene->getDefaultMouseCursor());
+	setMouseCursor(kDgdsMouseGameDefault);
 
 	_inventory->setRequestData(invRequestData);
 	_menu->setRequestData(vcrRequestData);
 
-	debug("Parsed Inv Request:\n%s", invRequestData.dump().c_str());
-	debug("Parsed VCR Request:\n%s", vcrRequestData.dump().c_str());
+	debug(1, "Parsed Inv Request:\n%s", invRequestData.dump().c_str());
+	debug(1, "Parsed VCR Request:\n%s", vcrRequestData.dump().c_str());
 }
 
 void DgdsEngine::loadRestartFile() {
@@ -440,11 +499,12 @@ void DgdsEngine::loadRestartFile() {
 	_gdsScene->loadRestart(_rstFileName, _resource, _decompressor);
 }
 
-static void _dumpFrame(const Graphics::ManagedSurface &surf, const char *name) {
+/*static*/ void
+DgdsEngine::dumpFrame(const Graphics::ManagedSurface &surf, const char *name) {
 #ifdef DUMP_FRAME_DATA
 	/* For debugging, dump the frame contents.. */
 	Common::DumpFile outf;
-	uint32 now = g_engine->getTotalPlayTime();
+	uint32 now = DgdsEngine::getInstance()->getThisFrameMs();
 
 	byte palbuf[768];
 	g_system->getPaletteManager()->grabPalette(palbuf, 0, 256);
@@ -457,7 +517,110 @@ static void _dumpFrame(const Graphics::ManagedSurface &surf, const char *name) {
 }
 
 
+void DgdsEngine::pumpMessages() {
+	Common::Event ev;
+	while (_eventMan->pollEvent(ev)) {
+		if (ev.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START) {
+			switch ((DgdsKeyEvent)ev.customType) {
+			case kDgdsKeyToggleMenu:
+				_menuToTrigger = kMenuMain;
+				break;
+			case kDgdsKeySave:
+				saveGameDialog();
+				break;
+			case kDgdsKeyLoad:
+				loadGameDialog();
+				break;
+			case kDgdsKeyToggleClock:
+				_clock.toggleVisibleUser();
+				break;
+			case kDgdsKeyNextChoice:
+				if (_menu->menuShown())
+					_menu->nextChoice();
+				else if (_scene->hasVisibleDialog())
+					_scene->nextChoice();
+				break;
+			case kDgdsKeyPrevChoice:
+				if (_menu->menuShown())
+					_menu->prevChoice();
+				else if (_scene->hasVisibleDialog())
+					_scene->prevChoice();
+				break;
+			case kDgdsKeyNextItem:
+				warning("TODO: Implement kDgdsKeyNextItem");
+				break;
+			case kDgdsKeyPrevItem:
+				warning("TODO: Implement kDgdsKeyPrevItem");
+				break;
+			case kDgdsKeyPickUp:
+				if (_menu->menuShown())
+					_menu->activateChoice();
+				else if (_scene->hasVisibleDialog())
+					_scene->activateChoice();
+				else
+					warning("TODO: Implement kDgdsKeyPickUp");
+				break;
+			case kDgdsKeyLook:
+				if (_menu->menuShown())
+					_menu->activateChoice();
+				else if (_scene->hasVisibleDialog())
+					_scene->activateChoice();
+				else
+					warning("TODO: Implement kDgdsKeyLook");
+				break;
+			case kDgdsKeyActivate:
+				warning("TODO: Implement kDgdsKeyActivate");
+				break;
+			default:
+				break;
+			}
+		} else if (ev.type == Common::EVENT_LBUTTONDOWN || ev.type == Common::EVENT_LBUTTONUP
+				|| ev.type == Common::EVENT_RBUTTONDOWN || ev.type == Common::EVENT_RBUTTONUP
+				|| ev.type == Common::EVENT_MOUSEMOVE) {
+			_lastMouseEvent = ev.type;
+			_lastMouse = ev.mouse;
+			// We can keep going if there were multiple moves or a move then a button, but
+			// stop if there was a button event to process it now.
+			if (_lastMouseEvent != Common::EVENT_MOUSEMOVE)
+				return;
+		} else if (ev.type == Common::EVENT_KEYDOWN) {
+			if (_dragonArcade)
+				_dragonArcade->onKeyDown(ev.kbd);
+			if (_chinaTrain)
+				_chinaTrain->onKeyDown(ev.kbd);
+		} else if (ev.type == Common::EVENT_KEYUP) {
+			if (_dragonArcade)
+				_dragonArcade->onKeyUp(ev.kbd);
+			if (_chinaTrain)
+				_chinaTrain->onKeyUp(ev.kbd);
+		}
+	}
+}
+
+void DgdsEngine::dimPalForWillyDialog(bool force) {
+	WillyGlobals *globals = static_cast<WillyGlobals *>(_gameGlobals);
+	int16 fade = globals->getPalFade();
+	fade = CLIP(fade, (int16)0, (int16)255);
+
+	// TODO: Same constants are in globals.cpp
+	static const int FADE_STARTCOL = 0x40;
+	static const int FADE_NUMCOLS = 0xC0;
+
+	if (force || _scene->hasVisibleHead()) {
+		fade = 0x80;
+	} else {
+		fade = 0;
+	}
+
+	if (_lastGlobalFade != fade || _lastGlobalFadedPal != _gamePals->getCurPalNum()) {
+		_gamePals->setFade(FADE_STARTCOL, FADE_NUMCOLS, 0, fade);
+		_lastGlobalFade = fade;
+		_lastGlobalFadedPal = _gamePals->getCurPalNum();
+	}
+}
+
 Common::Error DgdsEngine::run() {
+	syncSoundSettings();
 	_isLoading = true;
 	init(false);
 	loadGameFiles();
@@ -467,81 +630,16 @@ Common::Error DgdsEngine::run() {
 	if (saveSlot != -1)
 		loadGameState(saveSlot);
 
-	Common::EventManager *eventMan = g_system->getEventManager();
-	Common::Event ev;
-
 	_isLoading = false;
 
+	uint32 startMillis = g_system->getMillis();
+	uint32 frameCount = 0;
+
 	while (!shouldQuit()) {
-		Common::EventType mouseEvent = Common::EVENT_INVALID;
-		while (eventMan->pollEvent(ev)) {
-			if (ev.type == Common::EVENT_CUSTOM_ENGINE_ACTION_START) {
-				switch ((DgdsKeyEvent)ev.customType) {
-				case kDgdsKeyToggleMenu:
-					_menuToTrigger = kMenuMain;
-					break;
-				case kDgdsKeySave:
-					saveGameDialog();
-					break;
-				case kDgdsKeyLoad:
-					loadGameDialog();
-					break;
-				case kDgdsKeyToggleClock:
-					_clock.toggleVisibleUser();
-					break;
-				case kDgdsKeyNextChoice:
-					if (_menu->menuShown())
-						_menu->nextChoice();
-					else if (_scene->hasVisibleDialog())
-						_scene->nextChoice();
-					break;
-				case kDgdsKeyPrevChoice:
-					if (_menu->menuShown())
-						_menu->prevChoice();
-					else if (_scene->hasVisibleDialog())
-						_scene->prevChoice();
-					break;
-				case kDgdsKeyNextItem:
-					warning("TODO: Implement kDgdsKeyNextItem");
-					break;
-				case kDgdsKeyPrevItem:
-					warning("TODO: Implement kDgdsKeyPrevItem");
-					break;
-				case kDgdsKeyPickUp:
-					if (_menu->menuShown())
-						_menu->activateChoice();
-					else if (_scene->hasVisibleDialog())
-						_scene->activateChoice();
-					else
-						warning("TODO: Implement kDgdsKeyPickUp");
-					break;
-				case kDgdsKeyLook:
-					if (_menu->menuShown())
-						_menu->activateChoice();
-					else if (_scene->hasVisibleDialog())
-						_scene->activateChoice();
-					else
-						warning("TODO: Implement kDgdsKeyLook");
-					break;
-				case kDgdsKeyActivate:
-					warning("TODO: Implement kDgdsKeyActivate");
-					break;
-				default:
-					break;
-				}
-			} else if (ev.type == Common::EVENT_LBUTTONDOWN || ev.type == Common::EVENT_LBUTTONUP
-					|| ev.type == Common::EVENT_RBUTTONDOWN || ev.type == Common::EVENT_RBUTTONUP
-					|| ev.type == Common::EVENT_MOUSEMOVE) {
-				mouseEvent = ev.type;
-				_lastMouse = ev.mouse;
-			} else if (ev.type == Common::EVENT_KEYDOWN) {
-				if (_dragonArcade)
-					_dragonArcade->onKeyDown(ev.kbd);
-			} else if (ev.type == Common::EVENT_KEYUP) {
-				if (_dragonArcade)
-					_dragonArcade->onKeyUp(ev.kbd);
-			}
-		}
+		_thisFrameMs = getTotalPlayTime();
+
+		if (_lastMouseEvent == Common::EVENT_INVALID)
+			pumpMessages();
 
 		if (_menuToTrigger != kMenuNone) {
 			if (_inventory->isOpen()) {
@@ -550,7 +648,7 @@ Common::Error DgdsEngine::run() {
 				_menu->setScreenBuffer();
 				// force mouse on
 				CursorMan.showMouse(true);
-				setMouseCursor(_gdsScene->getDefaultMouseCursor());
+				setMouseCursor(kDgdsMouseGameDefault);
 				_menu->drawMenu(_menuToTrigger);
 			} else {
 				_menu->hideMenu();
@@ -560,7 +658,7 @@ Common::Error DgdsEngine::run() {
 		}
 
 		if (_menu->menuShown()) {
-			switch (mouseEvent) {
+			switch (_lastMouseEvent) {
 				case Common::EVENT_LBUTTONUP:
 					_menu->onMouseLUp(_lastMouse);
 					break;
@@ -573,34 +671,48 @@ Common::Error DgdsEngine::run() {
 				default:
 					break;
 			}
-			g_system->updateScreen();
-			g_system->delayMillis(10);
+			_menu->onTick();
 			_clock.update(false);
-			continue;
-		}
+		} else {
+			debug(10, "****  Starting frame %d time %d ****", frameCount, _thisFrameMs);
 
-		_scene->checkForClearedDialogs();
+			bool clearedDlg = _scene->checkForClearedDialogs();
 
-		_gdsScene->runPreTickOps();
-		_scene->runPreTickOps();
+			// Willy pauses script execution when the palette is faded by an active
+			// talking head is active
+			bool shouldRunScripts = !(_lastGlobalFade > 0 && !clearedDlg);
 
-		_compositionBuffer.blitFrom(_backgroundBuffer);
+			if (shouldRunScripts) {
+				_gdsScene->runPreTickOps();
+				_scene->runPreTickOps();
+				_compositionBuffer.blitFrom(_backgroundBuffer);
+			}
 
-		if (_inventory->isOpen() && _scene->getNum() == 2) {
-			int invCount = _gdsScene->countItemsInScene2();
-			_inventory->draw(_compositionBuffer, invCount);
-		}
+			if (_inventory->isOpen() && (_scene->getNum() == 2 || getGameId() == GID_WILLY)) {
+				int invCount = _gdsScene->countItemsInInventory();
+				_inventory->draw(_compositionBuffer, invCount);
+			}
 
-		_compositionBuffer.transBlitFrom(_storedAreaBuffer);
+			// Don't draw stored buffer over Willy Beamish inventory
+			if (shouldRunScripts && !(_inventory->isOpen() && getGameId() == GID_WILLY))
+				_compositionBuffer.transBlitFrom(_storedAreaBuffer);
 
-		_scene->drawActiveDialogBgs(&_compositionBuffer);
+			//
+			// The originals do something about drawing the background of dialogs here
+			// but that causes graphical glitches in scenes when a region is saved as it
+			// saves the dialog background too (eg, dragon scene 79).
+			//
+			// Instead we just draw the background and foreground of dialogs at the end.
+			//
+			//_scene->drawActiveDialogBgs(&_compositionBuffer);
 
-		if (_scene->getNum() != 2 || _inventory->isZoomVisible())
-			_adsInterp->run();
+			dumpFrame(_compositionBuffer, "comp-before-ads");
 
-		if (mouseEvent != Common::EVENT_INVALID) {
+			if (shouldRunScripts && (!_inventory->isOpen() || (_inventory->isZoomVisible() && getGameId() != GID_WILLY)))
+				_adsInterp->run();
+
 			if (_inventory->isOpen()) {
-				switch (mouseEvent) {
+				switch (_lastMouseEvent) {
 				case Common::EVENT_MOUSEMOVE:
 					_inventory->mouseMoved(_lastMouse);
 					break;
@@ -617,7 +729,7 @@ Common::Error DgdsEngine::run() {
 					break;
 				}
 			} else {
-				switch (mouseEvent) {
+				switch (_lastMouseEvent) {
 				case Common::EVENT_MOUSEMOVE:
 					_scene->mouseMoved(_lastMouse);
 					break;
@@ -637,43 +749,108 @@ Common::Error DgdsEngine::run() {
 					break;
 				}
 			}
+
+			if (shouldRunScripts) {
+				// This is hard-coded in Rise of the Dragon, others always run the ops if the game is active.
+				bool shouldRunPostTickOps = (getGameId() != GID_DRAGON || _scene->getNum() != 55);
+				if (shouldRunPostTickOps)
+					_gdsScene->runPostTickOps();
+
+				_scene->runPostTickOps();
+				_scene->checkTriggers();
+			}
+
+			dumpFrame(_backgroundBuffer, "back");
+			dumpFrame(_storedAreaBuffer, "stor");
+			dumpFrame(_compositionBuffer, "comp");
+
+			if (!_inventory->isOpen()) {
+				_gdsScene->drawItems(_compositionBuffer);
+				checkDrawInventoryButton();
+			}
+
+			if (getGameId() == GID_DRAGON)
+				_clock.draw(_compositionBuffer);
+
+			bool haveActiveDialog = _scene->checkDialogActive();
+
+			if (_debugShowHotAreas)
+				_scene->drawDebugHotAreas(_compositionBuffer);
+
+			if (getGameId() == GID_WILLY) {
+				if (!justChangedScene1())
+					_scene->drawAndUpdateHeads(_compositionBuffer);
+				_scene->drawAndUpdateDialogs(&_compositionBuffer);
+				_scene->updateHotAreasFromDynamicRects();
+			} else {
+				_scene->drawAndUpdateDialogs(&_compositionBuffer);
+				if (!justChangedScene1())
+					_scene->drawAndUpdateHeads(_compositionBuffer);
+			}
+
+			dumpFrame(_compositionBuffer, "comp-with-dlg");
+
+			bool gameRunning = (!haveActiveDialog && _gameGlobals->getGlobal(0x57));
+			_clock.update(gameRunning && shouldRunScripts);
+
+			g_system->copyRectToScreen(_compositionBuffer.getPixels(), SCREEN_WIDTH, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+			_justChangedScene1 = false;
 		}
 
-		// TODO: Hard-coded logic to match Rise of the Dragon, check others
-		if (getGameId() != GID_DRAGON || _scene->getNum() != 55)
-			_gdsScene->runPostTickOps();
+		// Mouse event is now handled.
+		_lastMouseEvent = Common::EVENT_INVALID;
 
-		_scene->runPostTickOps();
-		_scene->checkTriggers();
+		if (getGameId() == GID_WILLY) {
+			// Willy Beamish dims the palette of the screen while dialogs are active
+			dimPalForWillyDialog(false);
 
-		_dumpFrame(_backgroundBuffer, "back");
-		_dumpFrame(_storedAreaBuffer, "stor");
-		_dumpFrame(_compositionBuffer, "comp");
-
-		if (!_inventory->isOpen()) {
-			_gdsScene->drawItems(_compositionBuffer);
-			checkDrawInventoryButton();
+			// TODO: When should we show the cursor again?
+			WillyGlobals *globals = static_cast<WillyGlobals *>(_gameGlobals);
+			if (globals->isHideMouseCursor() && !_menu->menuShown())
+				CursorMan.showMouse(false);
 		}
 
-		if (getGameId() == GID_DRAGON)
-			_clock.draw(_compositionBuffer);
-
-		bool haveActiveDialog = _scene->checkDialogActive();
-
-		_scene->drawAndUpdateDialogs(&_compositionBuffer);
-		_scene->drawVisibleHeads(&_compositionBuffer);
-
-		_dumpFrame(_compositionBuffer, "comp-with-dlg");
-
-		bool gameRunning = (!haveActiveDialog && _gameGlobals->getGlobal(0x57) /* TODO: && _dragItem == nullptr*/);
-		_clock.update(gameRunning);
-
-		g_system->copyRectToScreen(_compositionBuffer.getPixels(), SCREEN_WIDTH, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 		g_system->updateScreen();
-		g_system->delayMillis(10);
 
-		_justChangedScene1 = false;
-		_justChangedScene2 = false;
+		//
+		// Limit frame rate to 15 FPS
+		//
+		// Most game events are based on timed delays using eg TTM op 0x1020,
+		// but some game events are based on frames - eg the chef turning
+		// around in Willy Beamish kitchen (scene 46) uses global 190 to count
+		// down frames before the chef turns around.  If they don't match, it's
+		// impossible to complete the needed actions (timed on ms) before the
+		// chef moves (timed on frames).
+		//
+		static const int framesPerSecond = 15;
+
+		frameCount++;
+
+		uint32 thisFrameEndMillis = g_system->getMillis();
+		uint32 elapsedMillis = thisFrameEndMillis - startMillis;
+		const uint32 targetMillis = (frameCount * 1000 / framesPerSecond);
+		if (targetMillis > elapsedMillis) {
+			//
+			// Too fast, delay.
+			//
+			// Pump messages and update the screen - moves will be accumulated and the
+			// last one will be processed in the next frame.  This way the mouse moves
+			// at 60+ FPS even though the game is only 15 FPS.
+			//
+			while (targetMillis > elapsedMillis) {
+				if (_lastMouseEvent == Common::EVENT_INVALID || _lastMouseEvent == Common::EVENT_MOUSEMOVE)
+					pumpMessages();
+				g_system->updateScreen();
+				g_system->delayMillis(5);
+				elapsedMillis = g_system->getMillis() - startMillis;
+			}
+		} else if (targetMillis < elapsedMillis) {
+			// too slow.. adjust expectations? :)
+			startMillis = thisFrameEndMillis;
+			frameCount = 0;
+		}
+
 	}
 	return Common::kNoError;
 }
@@ -684,6 +861,7 @@ void DgdsEngine::restartGame() {
 	loadGameFiles();
 	loadRestartFile();
 	_gameGlobals->setGlobal(0x57, 1);
+	_isLoading = false;
 }
 
 Common::SeekableReadStream *DgdsEngine::getResource(const Common::String &name, bool ignorePatches) {
@@ -707,11 +885,12 @@ bool DgdsEngine::canSaveAutosaveCurrently() {
 }
 
 void DgdsEngine::enableKeymapper() {
-	_eventMan->getKeymapper()->setEnabled(true);
+	_eventMan->getKeymapper()->setEnabledKeymapType(Common::Keymap::kKeymapTypeGame);
 }
 
 void DgdsEngine::disableKeymapper() {
-	_eventMan->getKeymapper()->setEnabled(false);
+	// Don't totally disable keymapper, as we still want the console and screenshot keys to work.
+	_eventMan->getKeymapper()->setEnabledKeymapType(Common::Keymap::kKeymapTypeGui);
 }
 
 Common::Error DgdsEngine::syncGame(Common::Serializer &s) {
@@ -744,10 +923,25 @@ Common::Error DgdsEngine::syncGame(Common::Serializer &s) {
 		if (!_resource->hasResource(sceneFile))
 			error("Game references non-existent scene %d", sceneNum);
 
-		_soundPlayer->unloadMusic();
+		// Reset scene and music etc.
+		setMouseCursor(kDgdsMouseGameDefault);
 		_soundPlayer->stopAllSfx();
+		_soundPlayer->stopMusic();
 		_scene->unload();
+		_scene->setDragItem(nullptr);
 		_adsInterp->unload();
+
+		// Clear arcade state completely.
+		if (getGameId() == GID_DRAGON) {
+			delete _dragonArcade;
+			_dragonArcade = new DragonArcade();
+		} else if (getGameId() == GID_HOC) {
+			delete _chinaTank;
+			delete _chinaTrain;
+			_chinaTank = new ChinaTank();
+			_chinaTrain = new ChinaTrain();
+		}
+
 		_scene->load(sceneFile, _resource, _decompressor);
 	}
 
@@ -765,7 +959,7 @@ Common::Error DgdsEngine::syncGame(Common::Serializer &s) {
 
 	// Add inv button - we deferred this to now to make sure globals etc
 	// are in the right state.
-	if (s.isLoading())
+	if (s.isLoading() && getGameId() != GID_WILLY)
 		_scene->addInvButtonToHotAreaList();
 
 	if (s.getVersion() < 4) {
@@ -780,12 +974,12 @@ Common::Error DgdsEngine::syncGame(Common::Serializer &s) {
 
 	s.syncAsSint16LE(_textSpeed);
 	s.syncAsByte(_justChangedScene1);
-	s.syncAsByte(_justChangedScene2);
+	byte dummy = 0;
+	s.syncAsByte(dummy); // this was originally _justChangedScene2, but it's never used.
 
 	// sync engine play time to ensure various events run correctly.
-	uint32 playtime = g_engine->getTotalPlayTime();
-	s.syncAsUint32LE(playtime);
-	g_engine->setTotalPlayTime(playtime);
+	s.syncAsUint32LE(_thisFrameMs);
+	setTotalPlayTime(_thisFrameMs);
 
 	s.syncString(_backgroundFile);
 	if (s.isLoading()) {
@@ -793,7 +987,7 @@ Common::Error DgdsEngine::syncGame(Common::Serializer &s) {
 		_storedAreaBuffer.fillRect(Common::Rect(SCREEN_WIDTH, SCREEN_HEIGHT), 0);
 	}
 
-	debug("%s", _scene->dump("").c_str());
+	debug(1, "%s", _scene->dump("").c_str());
 	_scene->runEnterSceneOps();
 
 	return Common::kNoError;

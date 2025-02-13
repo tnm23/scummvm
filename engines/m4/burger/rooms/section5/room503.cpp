@@ -688,7 +688,7 @@ void Room503::daemon() {
 			if (_G(player).walker_visible && player_commands_allowed()) {
 				intr_cancel_sentence();
 				player_set_commands_allowed(false);
-				ws_walk(260, 300, 0, 17, 2, true);
+				ws_walk(260, 300, nullptr, 17, 2, true);
 			} else {
 				kernel_timing_trigger(15, 16);
 			}
@@ -824,7 +824,7 @@ void Room503::daemon() {
 
 		case 6:
 			ws_unhide_walker();
-			ws_walk(260, 300, 0, -1, 2);
+			ws_walk(260, 300, nullptr, -1, 2);
 			kernel_timing_trigger(imath_ranged_rand(180, 360), 19);
 			break;
 
@@ -882,10 +882,10 @@ void Room503::pre_parser() {
 	} else {
 		if (_flag1) {
 			player_update_info();
-			HotSpotRec *hotspot = hotspot_which(_G(click_x), _G(click_y));
+			HotSpotRec *hotspot = hotspot_which(_G(player).click_x, _G(player).click_y);
 
-			if (_G(click_x) > 272 && _G(click_y) < 300 && player_said("FLOOR")) {
-				ws_walk(_G(click_x), 301, nullptr, -1, 1);
+			if (_G(player).click_x > 272 && _G(player).click_y < 300 && player_said("FLOOR")) {
+				ws_walk(_G(player).click_x, 301, nullptr, -1, 1);
 			} else if (hotspot->feet_x > 272 && hotspot->feet_y < 300) {
 				player_hotspot_walk_override(hotspot->feet_x, 301, 1);
 			}

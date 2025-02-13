@@ -21,7 +21,9 @@
 
 #include "twine/audio/sound.h"
 #include "audio/audiostream.h"
+#include "audio/decoders/raw.h"
 #include "audio/decoders/voc.h"
+#include "common/config-manager.h"
 #include "common/memstream.h"
 #include "common/system.h"
 #include "common/text-to-speech.h"
@@ -69,11 +71,11 @@ void Sound::setSamplePosition(int32 channelIdx, int32 x, int32 y, int32 z) {
 	if (channelIdx < 0 || channelIdx >= NUM_CHANNELS) {
 		return;
 	}
-	const int32 camX = _engine->_grid->_newCamera.x * SIZE_BRICK_XZ;
-	const int32 camY = _engine->_grid->_newCamera.y * SIZE_BRICK_Y;
-	const int32 camZ = _engine->_grid->_newCamera.z * SIZE_BRICK_XZ;
+	const int32 camX = _engine->_grid->_startCube.x * SIZE_BRICK_XZ;
+	const int32 camY = _engine->_grid->_startCube.y * SIZE_BRICK_Y;
+	const int32 camZ = _engine->_grid->_startCube.z * SIZE_BRICK_XZ;
 	int32 distance = getDistance3D(camX, camY, camZ, x, y, z);
-	distance = _engine->_collision->boundRuleThree(0, distance, 10000, 255);
+	distance = boundRuleThree(0, distance, 10000, 255);
 	byte targetVolume = 0;
 	if (distance < 255) {
 		targetVolume = 255 - distance;
@@ -107,11 +109,11 @@ void Sound::playFlaSample(int32 index, int32 repeat, uint8 balance, int32 volume
 	}
 
 	Common::MemoryReadStream *stream = new Common::MemoryReadStream(sampPtr, sampSize, DisposeAfterUse::YES);
-	Audio::SeekableAudioStream *audioStream = Audio::makeVOCStream(stream, DisposeAfterUse::YES);
+	Audio::SeekableAudioStream *audioStream = Audio::makeVOCStream(stream, Audio::FLAG_UNSIGNED, DisposeAfterUse::YES);
 	playSample(channelIdx, index, audioStream, repeat, Resources::HQR_FLASAMP_FILE);
 }
 
-void Sound::playSample(int32 index, int32 repeat, int32 x, int32 y, int32 z, int32 actorIdx) {
+void Sound::playSample(int32 index, uint16 pitchbend, int32 repeat, int32 x, int32 y, int32 z, int32 actorIdx) {
 	if (!_engine->_cfgfile.Sound) {
 		return;
 	}
@@ -133,8 +135,10 @@ void Sound::playSample(int32 index, int32 repeat, int32 x, int32 y, int32 z, int
 	uint8 *sampPtr = _engine->_resources->_samplesTable[index];
 	uint32 sampSize = _engine->_resources->_samplesSizeTable[index];
 	Common::MemoryReadStream *stream = new Common::MemoryReadStream(sampPtr, sampSize, DisposeAfterUse::NO);
-	Audio::SeekableAudioStream *audioStream = Audio::makeVOCStream(stream, DisposeAfterUse::YES);
+	Audio::SeekableAudioStream *audioStream = Audio::makeVOCStream(stream, Audio::FLAG_UNSIGNED, DisposeAfterUse::YES);
 	playSample(channelIdx, index, audioStream, repeat, Resources::HQR_SAMPLES_FILE, Audio::Mixer::kSFXSoundType);
+	uint16 frequency = 11025 + (pitchbend - 0x1000);
+	_engine->_system->getMixer()->setChannelRate(samplesPlaying[channelIdx], frequency);
 }
 
 bool Sound::playVoxSample(const TextEntry *text) {
@@ -179,7 +183,7 @@ bool Sound::playVoxSample(const TextEntry *text) {
 		*sampPtr = 'C';
 	}
 	Common::MemoryReadStream *stream = new Common::MemoryReadStream(sampPtr, sampSize, DisposeAfterUse::YES);
-	Audio::SeekableAudioStream *audioStream = Audio::makeVOCStream(stream, DisposeAfterUse::YES);
+	Audio::SeekableAudioStream *audioStream = Audio::makeVOCStream(stream, Audio::FLAG_UNSIGNED, DisposeAfterUse::YES);
 	return playSample(channelIdx, text->index, audioStream, 1, _engine->_text->_currentVoxBankFile.c_str(), Audio::Mixer::kSpeechSoundType);
 }
 
@@ -188,6 +192,8 @@ bool Sound::playSample(int channelIdx, int index, Audio::SeekableAudioStream *au
 		warning("Failed to create audio stream for %s: %i", name, index);
 		return false;
 	}
+
+	// infinite loop
 	if (loop == -1) {
 		loop = 0;
 	}
@@ -213,7 +219,7 @@ void Sound::pauseSamples() {
 	_engine->_system->getMixer()->pauseAll(true);
 }
 
-void Sound::stopSamples() {
+void Sound::stopSamples() { // HQ_StopSample
 	if (!_engine->_cfgfile.Sound) {
 		return;
 	}

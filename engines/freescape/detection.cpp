@@ -104,6 +104,15 @@ static const ADGameDescription gameDescriptions[] = {
 		GUIO2(GUIO_NOMIDI, GAMEOPTION_AUTOMATIC_DRILLING)
 	},
 	{
+		"driller", // Tape re-releae
+		"",
+		AD_ENTRY1s("DRILLER.C64.DATA", "606bc969e5442634c8ab057bfde9d9d2", 64750),
+		Common::EN_ANY,
+		Common::kPlatformC64,
+		ADGF_UNSTABLE,
+		GUIO2(GUIO_NOMIDI, GAMEOPTION_AUTOMATIC_DRILLING)
+	},
+	{
 		"driller",
 		"",
 		{
@@ -117,7 +126,7 @@ static const ADGameDescription gameDescriptions[] = {
 		Common::EN_ANY,
 		Common::kPlatformDOS,
 		ADGF_NO_FLAGS,
-		GUIO4(GUIO_NOMIDI, GUIO_RENDEREGA, GUIO_RENDERCGA, GAMEOPTION_AUTOMATIC_DRILLING)
+		GUIO5(GUIO_NOMIDI, GUIO_RENDEREGA, GUIO_RENDERCGA, GUIO_RENDERHERCGREEN, GAMEOPTION_AUTOMATIC_DRILLING)
 	},
 	{ // Retail release
 		"driller",
@@ -503,6 +512,15 @@ static const ADGameDescription gameDescriptions[] = {
 		ADGF_NO_FLAGS,
 		GUIO2(GUIO_NOMIDI, GUIO_RENDERCPC)
 	},
+	{
+		"darkside", // Tape relese
+		"",
+		AD_ENTRY1s("DARKSIDE.C64.DATA", "c0d271d86cf4434ef7c3d823a32c0df5", 61290),
+		Common::EN_ANY,
+		Common::kPlatformC64,
+		ADGF_UNSTABLE,
+		GUIO2(GUIO_NOMIDI, GAMEOPTION_AUTOMATIC_DRILLING)
+	},
 	// Total Eclipse
 	{
 		"totaleclipse",
@@ -560,7 +578,7 @@ static const ADGameDescription gameDescriptions[] = {
 		AD_ENTRY1s("totaleclipse.zx.data", "5e80cb6a518d5ab2192b845801b1a32e", 35661),
 		Common::EN_ANY,
 		Common::kPlatformZX,
-		ADGF_TESTING,
+		ADGF_NO_FLAGS,
 		GUIO2(GUIO_NOMIDI, GUIO_RENDERZX)
 	},
 	{
@@ -574,7 +592,7 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::EN_ANY,
 		Common::kPlatformAmstradCPC,
-		ADGF_TESTING,
+		ADGF_NO_FLAGS,
 		GUIO2(GUIO_NOMIDI, GUIO_RENDERCPC)
 	},
 	{
@@ -588,7 +606,21 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::EN_ANY,
 		Common::kPlatformAmstradCPC,
-		ADGF_TESTING,
+		ADGF_NO_FLAGS,
+		GUIO2(GUIO_NOMIDI, GUIO_RENDERCPC)
+	},
+	{
+		"totaleclipse2",
+		"",
+		{
+			{"TE2.BI1", 0, "fc6e1a240e76a68e02ce1db5ad9a689a", 16512},
+			{"TE2.BI2", 0, "c346262234e509ba5576c0a3362bc414", 35398},
+			{"TE2.BI3", 0, "d73485df2eccb90592bb598693b10555", 16512},
+			AD_LISTEND
+		},
+		Common::EN_ANY,
+		Common::kPlatformAmstradCPC,
+		ADGF_NO_FLAGS,
 		GUIO2(GUIO_NOMIDI, GUIO_RENDERCPC)
 	},
 	{
@@ -604,7 +636,7 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::EN_ANY,
 		Common::kPlatformDOS,
-		ADGF_TESTING,
+		ADGF_NO_FLAGS,
 		GUIO3(GUIO_NOMIDI, GUIO_RENDEREGA, GUIO_RENDERCGA)
 	},
 	{ // Erbe Software release
@@ -620,7 +652,7 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::EN_ANY,
 		Common::kPlatformDOS,
-		ADGF_TESTING,
+		ADGF_NO_FLAGS,
 		GUIO3(GUIO_NOMIDI, GUIO_RENDEREGA, GUIO_RENDERCGA)
 	},
 	{
@@ -752,6 +784,20 @@ static const ADGameDescription gameDescriptions[] = {
 		"castlemaster",
 		"",
 		{
+			{"CM.BIN", 0, "b971443542d1f8cfe0b8a92054f0aa61", 39866},
+			{"CMLOAD.BIN", 0, "14806e71e2d14980a4ba8e3e35e66593", 16512},
+			{"CMSCR.BIN", 0, "75fe4a8af0ca797c51922f0ceeb8d383", 16512},
+			AD_LISTEND
+		},
+		Common::EN_ANY,
+		Common::kPlatformAmstradCPC,
+		ADGF_UNSTABLE,
+		GUIO2(GUIO_NOMIDI, GUIO_RENDERCPC)
+	},
+	{
+		"castlemaster",
+		"",
+		{
 			{"CASTLE.EXE", 0, "f1a141df0e47860246716db20d2ba061", 2806},
 			{"CMC.EXE", 0, "03af2b79b1aad690684cf89025c5f425", 60240},
 			{"CMT.EXE", 0, "a603d3f96e981ab0014b7b1a5a2dc28c", 81840},
@@ -761,7 +807,7 @@ static const ADGameDescription gameDescriptions[] = {
 		},
 		Common::UNK_LANG,
 		Common::kPlatformDOS,
-		ADGF_UNSTABLE,
+		ADGF_PIRATED,
 		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA)
 	},
 	{
@@ -775,7 +821,23 @@ static const ADGameDescription gameDescriptions[] = {
 			{"CMH.EXE", 0, "26337adc7861300e5395e992e42b6329", 59968},
 			AD_LISTEND
 		},
-		Common::EN_ANY,
+		Common::UNK_LANG, // Multi-language
+		Common::kPlatformDOS,
+		ADGF_UNSTABLE,
+		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA)
+	},
+	{
+		"castlemaster",
+		"Virtual Worlds",
+		{
+			{"CASTLE.EXE", 0, "ee80b083151fb1d70e3045a02f0de7fd", 2688},
+			{"CMC.EXE", 0, "9015c244dc8a97fe55df7b235b31e00c", 57168},
+			{"CME.EXE", 0, "d563ae1475752e6a9a81b1350abebef3", 89248},
+			{"CMH.EXE", 0, "cc68c42d254b3aa0f208cd08731c6805", 59968},
+			{"CMT.EXE", 0, "5814e68a175f74ebce0773a73e7488c7", 78768},
+			AD_LISTEND
+		},
+		Common::UNK_LANG, // Multi-language
 		Common::kPlatformDOS,
 		ADGF_UNSTABLE,
 		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA)
@@ -791,9 +853,25 @@ static const ADGameDescription gameDescriptions[] = {
 			{"CMH.EXE", 0, "03b6f4c5b8931259e42e229de06ac5fc", 35645},
 			AD_LISTEND
 		},
-		Common::EN_ANY,
+		Common::UNK_LANG, // Multi-language
 		Common::kPlatformDOS,
 		ADGF_UNSTABLE,
+		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA)
+	},
+	{
+		"castlemaster",
+		"CD release",
+		{
+			{"CASTLE.EXE", 0, "7601f74572b3c99bfc8d3f6d9d43d356", 29804},
+			{"CMC.EXE", 0, "c7f651402307693048604e0f47c5c9e9", 57216},
+			{"CME.EXE", 0, "e01f1561cbdc48d0a20823fdb852bdf1", 89296},
+			{"CMH.EXE", 0, "76ac58ed66451689e84823706e000b6e", 60016},
+			{"CMT.EXE", 0, "8c8621b5927d090bb7a4dca8d39cbfcf", 78816},
+			AD_LISTEND
+		},
+		Common::UNK_LANG, // Multi-language
+		Common::kPlatformDOS,
+		ADGF_UNSUPPORTED,
 		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA)
 	},
 	{
@@ -812,7 +890,6 @@ static const ADGameDescription gameDescriptions[] = {
 		ADGF_UNSTABLE,
 		GUIO4(GUIO_NOMIDI, GAMEOPTION_TRAVEL_ROCK, GUIO_RENDEREGA, GUIO_RENDERCGA)
 	},
-
 	// 3D Construction Kit games
 	{
 		"3dkit",
@@ -1008,6 +1085,7 @@ static const DebugChannelDef debugFlagList[] = {
 	{Freescape::kFreescapeDebugParser, "parser", ""},
 	{Freescape::kFreescapeDebugCode, "code", ""},
 	{Freescape::kFreescapeDebugMedia, "media", ""},
+	{Freescape::kFreescapeDebugGroup, "group", ""},
 	DEBUG_CHANNEL_END
 };
 

@@ -110,13 +110,15 @@ const GameIdStrToEnum gameIdStrToEnum[] = {
 	{ nullptr,           nullptr,           GID_ALL,              false, SCI_VERSION_NONE }
 };
 
-Common::String customizeGuiOptions(Common::Path gamePath, Common::String guiOptions, SciVersion version) {
+Common::String customizeGuiOptions(Common::Path gamePath, Common::String guiOptions, Common::Platform platform, Common::String idStr, SciVersion version) {
 	struct RMode {
 		SciVersion min;
 		SciVersion max;
 		const char gfxDriverName[13];
 		const char *guio;
-	} rmodes[] = {
+	};
+
+	static const RMode rmodes[] = {
 		{ SCI_VERSION_0_EARLY,	SCI_VERSION_1_EGA_ONLY,		"EGA320.DRV",		GUIO_RENDEREGA },
 		{ SCI_VERSION_0_EARLY,	SCI_VERSION_1_EGA_ONLY,		"CGA320C.DRV",		GUIO_RENDERCGA },
 		{ SCI_VERSION_0_EARLY,	SCI_VERSION_1_EGA_ONLY,		"CGA320BW.DRV",		GUIO_RENDERCGABW },
@@ -131,21 +133,43 @@ Common::String customizeGuiOptions(Common::Path gamePath, Common::String guiOpti
 		{ SCI_VERSION_1_LATE,	SCI_VERSION_1_LATE,			"9801V8.DRV",		GUIO_RENDERPC98_8C },
 		{ SCI_VERSION_01,		SCI_VERSION_01,				"9801V8M.DRV",		GUIO_RENDERPC98_8C },
 		{ SCI_VERSION_01,		SCI_VERSION_01,				"9801VID.DRV",		GUIO_RENDERPC98_8C },
+		{ SCI_VERSION_1_1,		SCI_VERSION_1_1,			"SCIWV.EXE",		GUIO_RENDERWIN_16C }
 	};
 
-	Common::FSNode node(gamePath);
+	static const char *sci11WinTargets[] = {
+		"ecoquest",
+		"ecoquest2",
+		"kq6",
+		"laurabow2",
+		"pepper",
+		"sq4"
+	};
 
-	if (!node.exists()) {
+	bool isWindows = false;
+	if (platform == Common::kPlatformWindows) {
+		for (const char *const *i = sci11WinTargets; isWindows == false && i != &sci11WinTargets[ARRAYSIZE(sci11WinTargets)]; ++i)
+			isWindows = idStr.equals(*i);
+		if (isWindows)
+			guiOptions += GUIO_RENDERWIN_256C;
+	}
+
+	Common::FSNode node(gamePath);
+	Common::FSList files;
+	if (!node.getChildren(files, Common::FSNode::kListFilesOnly)) {
 		warning("Game path '%s' could not be accessed", gamePath.toString().c_str());
 		return guiOptions;
 	}
 
-	Common::FSList files;
-	node.getChildren(files, Common::FSNode::kListFilesOnly);
 	for (Common::FSList::const_iterator i = files.begin(); i != files.end(); ++i) {
 		for (int ii = 0; ii < ARRAYSIZE(rmodes); ii++) {
-			if ((version == SCI_VERSION_NONE || (version >= rmodes[ii].min && version <= rmodes[ii].max)) && i->getFileName().equalsIgnoreCase(rmodes[ii].gfxDriverName))
-				guiOptions += rmodes[ii].guio;
+			if (version == SCI_VERSION_NONE || (rmodes[ii].min <= version && version <= rmodes[ii].max)) {
+				if (i->getFileName().equalsIgnoreCase(rmodes[ii].gfxDriverName)) {
+					// Make sure that the Windows 16 colors mode is only ever added to the above mentioned
+					// windows versions and the other modes only get added to the other versions.
+					if (isWindows != (strncmp(rmodes[ii].guio, GUIO_RENDERWIN_16C, 1) != 0))
+						guiOptions += rmodes[ii].guio;
+				}
+			}
 		}
 	}
 

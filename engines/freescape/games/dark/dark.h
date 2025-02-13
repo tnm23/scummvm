@@ -63,6 +63,7 @@ public:
 	void executePrint(FCLInstruction &instruction) override;
 
 	void initDOS();
+	void initC64();
 	void initAmigaAtari();
 	void initZX();
 	void initCPC();
@@ -70,6 +71,7 @@ public:
 	void loadAssets() override;
 	void loadAssetsDOSFullGame() override;
 	void loadAssetsDOSDemo() override;
+	void loadAssetsC64FullGame() override;
 	void loadAssetsAmigaFullGame() override;
 	void loadAssetsAtariFullGame() override;
 
@@ -88,15 +90,16 @@ public:
 
 	void drawSensorShoot(Sensor *sensor) override;
 	void drawDOSUI(Graphics::Surface *surface) override;
+	void drawC64UI(Graphics::Surface *surface) override;
 	void drawZXUI(Graphics::Surface *surface) override;
 	void drawCPCUI(Graphics::Surface *surface) override;
 	void drawAmigaAtariSTUI(Graphics::Surface *surface) override;
 
-	Common::BitArray _fontBig;
-	Common::BitArray _fontMedium;
-	Common::BitArray _fontSmall;
-
+	Font _fontBig;
+	Font _fontMedium;
+	Font _fontSmall;
 	int _soundIndexRestoreECD;
+	int _soundIndexDestroyECD;
 
 	void drawString(const DarkFontSize size, const Common::String &str, int x, int y, uint32 primaryColor, uint32 secondaryColor, uint32 backColor, Graphics::Surface *surface);
 	void drawInfoMenu() override;

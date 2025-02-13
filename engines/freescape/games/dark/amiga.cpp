@@ -26,7 +26,14 @@
 
 namespace Freescape {
 
+extern Common::String centerAndPadString(const Common::String &str, int size);
+
 void DarkEngine::loadAssetsAmigaFullGame() {
+	Common::File file;
+	file.open("0.drk");
+	_title = loadAndConvertNeoImage(&file, 0x9930);
+	file.close();
+
 	Common::SeekableReadStream *stream = decryptFileAmigaAtari("1.drk", "0.drk", 798);
 	parseAmigaAtariHeader(stream);
 
@@ -35,6 +42,45 @@ void DarkEngine::loadAssetsAmigaFullGame() {
 	loadPalettes(stream, 0x2e528);
 	loadGlobalObjects(stream, 0x30f0 - 50, 24);
 	loadMessagesVariableSize(stream, 0x3d37, 66);
+	loadSoundsFx(stream, 0x34738 + 2, 11);
+
+	Common::Array<Graphics::ManagedSurface *> chars;
+	chars = getCharsAmigaAtariInternal(8, 8, - 7 - 8, 16, 16, stream, 0x1b0bc, 85);
+	_fontBig = Font(chars);
+
+	chars = getCharsAmigaAtariInternal(8, 8, 0, 10, 8, stream, 0x1b0bc + 0x430, 85);
+	_fontMedium = Font(chars);
+
+	chars = getCharsAmigaAtariInternal(8, 5, - 7 - 8, 10, 16, stream, 0x1b0bc + 0x430, 85);
+	_fontSmall = Font(chars);
+	_fontSmall.setCharWidth(4);
+
+	_fontLoaded = true;
+
+	GeometricObject *obj = nullptr;
+	obj = (GeometricObject *)_areaMap[15]->objectWithID(18);
+	assert(obj);
+	obj->_cyclingColors = true;
+
+	obj = (GeometricObject *)_areaMap[15]->objectWithID(26);
+	assert(obj);
+	obj->_cyclingColors = true;
+
+	for (int i = 0; i < 3; i++) {
+		int16 id = 227 + i * 6 - 2;
+		for (int j = 0; j < 2; j++) {
+			//debugC(1, kFreescapeDebugParser, "Restoring object %d to from ECD %d", id, index);
+			obj = (GeometricObject *)_areaMap[255]->objectWithID(id);
+			assert(obj);
+			obj->_cyclingColors = true;
+			id--;
+		}
+	}
+
+	for (auto &area : _areaMap) {
+		// Center and pad each area name so we do not have to do it at each frame
+		area._value->_name = centerAndPadString(area._value->_name, 26);
+	}
 }
 
 void DarkEngine::drawAmigaAtariSTUI(Graphics::Surface *surface) {
@@ -46,27 +92,30 @@ void DarkEngine::drawAmigaAtariSTUI(Graphics::Surface *surface) {
 	uint32 transparent = _gfx->_texturePixelFormat.ARGBToColor(0x00, 0x00, 0x00, 0x00);
 	uint32 grey = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0x60, 0x60, 0x60);
 
+	uint32 grey8 = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0x88, 0x88, 0x88);
+	uint32 greyA = _gfx->_texturePixelFormat.ARGBToColor(0xFF, 0xAA, 0xAA, 0xAA);
+
 	int score = _gameStateVars[k8bitVariableScore];
 	int ecds = _gameStateVars[kVariableActiveECDs];
-	drawString(kDarkFontSmall, Common::String::format("%04d", int(2 * _position.x())), 18, 178, red, red, black, surface);
-	drawString(kDarkFontSmall, Common::String::format("%04d", int(2 * _position.z())), 18, 184, red, red, black, surface);
-	drawString(kDarkFontSmall, Common::String::format("%04d", int(2 * _position.y())), 18, 190, red, red, black, surface);
+	drawString(kDarkFontSmall, Common::String::format("%04d", int(2 * _position.x())), 19, 178, red, red, black, surface);
+	drawString(kDarkFontSmall, Common::String::format("%04d", int(2 * _position.z())), 19, 184, red, red, black, surface);
+	drawString(kDarkFontSmall, Common::String::format("%04d", int(2 * _position.y())), 19, 190, red, red, black, surface);
 
 	drawString(kDarkFontBig, Common::String::format("%02d", int(_angleRotations[_angleRotationIndex])), 73, 178, red, red, black, surface);
 	drawString(kDarkFontBig, Common::String::format("%3d", _playerSteps[_playerStepIndex]), 73, 186, red, red, black, surface);
-	drawString(kDarkFontBig, Common::String::format("%07d", score), 93, 16, yellow, orange, black, surface);
-	drawString(kDarkFontBig, Common::String::format("%3d%%", ecds), 181, 16, yellow, orange, black, surface);
+	drawString(kDarkFontBig, Common::String::format("%07d", score), 93, 16, orange, yellow, black, surface);
+	drawString(kDarkFontBig, Common::String::format("%3d%%", ecds), 181, 16, orange, yellow, black, surface);
 
 	Common::String message;
 	int deadline;
 	getLatestMessages(message, deadline);
 	if (deadline <= _countdown) {
-		drawString(kDarkFontSmall, message, 32, 157, white, white, transparent, surface);
+		drawString(kDarkFontSmall, message, 32, 157, grey8, greyA, transparent, surface);
 		_temporaryMessages.push_back(message);
 		_temporaryMessageDeadlines.push_back(deadline);
 	}
 
-	drawString(kDarkFontSmall, _currentArea->_name, 32, 151, white, white, transparent, surface);
+	drawString(kDarkFontSmall, _currentArea->_name, 32, 151, grey8, greyA, transparent, surface);
 	drawBinaryClock(surface, 6, 110, white, grey);
 
 	int x = 229;
@@ -99,60 +148,25 @@ void DarkEngine::initAmigaAtari() {
 void DarkEngine::drawString(const DarkFontSize size, const Common::String &str, int x, int y, uint32 primaryColor, uint32 secondaryColor, uint32 backColor, Graphics::Surface *surface) {
 	if (!_fontLoaded)
 		return;
+
+	Font *font = nullptr;
+
+	if (size == kDarkFontBig) {
+		font = &_fontBig;
+	} else if (size == kDarkFontMedium) {
+		font = &_fontMedium;
+	} else if (size == kDarkFontSmall) {
+		font = &_fontSmall;
+	} else {
+		error("Invalid font size %d", size);
+		return;
+	}
+
 	Common::String ustr = str;
 	ustr.toUppercase();
-
-	int multiplier1 = 0;
-	int multiplier2 = 0;
-	int sizeX = 0;
-	int sizeY = 0;
-	int sep = 0;
-
-	switch (size) {
-		case kDarkFontBig:
-			multiplier1 = 16;
-			multiplier2 = 16;
-			sizeY = 8;
-			sizeX = 8;
-			sep = 8;
-			_font = _fontBig;
-		break;
-		case kDarkFontMedium:
-			multiplier1 = 10;
-			multiplier2 = 8;
-			sizeY = 8;
-			sizeX = 8;
-			sep = 8;
-			_font = _fontMedium;
-		break;
-		case kDarkFontSmall:
-			multiplier1 = 10;
-			multiplier2 = 16;
-			sizeY = 5;
-			sizeX = 8;
-			sep = 4;
-			_font = _fontSmall;
-		break;
-		default:
-			error("Invalid font size %d", size);
-		break;
-	}
-
-	for (uint32 c = 0; c < ustr.size(); c++) {
-		assert(ustr[c] >= 32);
-		int position = 8 * (multiplier1*(ustr[c] - 32));
-		for (int j = 0; j < sizeY; j++) {
-			for (int i = 0; i < sizeX; i++) {
-				if (_font.get(position + j * multiplier2 + i)) {
-					surface->setPixel(x + 8 - i + sep * c, y + j, primaryColor);
-				} /*else if (_font.get(position + j * multiplier2 + i)) {
-					surface->setPixel(x + 8 - i + 8 * c, y + j, primaryColor);
-				}*/ else {
-					surface->setPixel(x + 8 - i + sep * c, y + j, backColor);
-				}
-			}
-		}
-	}
+	font->setBackground(backColor);
+	font->setSecondaryColor(secondaryColor);
+	font->drawString(surface, ustr, x, y, _screenW, primaryColor);
 }
 
 } // End of namespace Freescape

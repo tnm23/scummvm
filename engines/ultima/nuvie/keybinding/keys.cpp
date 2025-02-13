@@ -64,8 +64,8 @@ struct Action {
 	ActionKeyType keyType;
 };
 
-const char *appendAltCodeActionStr = "ALT_CODE";
-const char *toggleAltCodeModeActionStr = "TOGGLE_ALT_CODE_MODE";
+const char *const appendAltCodeActionStr = "ALT_CODE";
+const char *const toggleAltCodeModeActionStr = "TOGGLE_ALT_CODE_MODE";
 const uint toggleAltCodeModeEventID = Common::hashit(toggleAltCodeModeActionStr); // to identify END (KEYUP) events for alt-code mode toggle action
 
 const Action NuvieActions[] = {
@@ -143,7 +143,7 @@ const Action NuvieActions[] = {
 	{ "DO_NOTHING", ActionDoNothing, Action::KeyNotShown, true, OTHER_KEY },
 };
 
-const char *PerPartyMemberActions[] = {
+const char *const PerPartyMemberActions[] = {
 	"SOLO_MODE", "SHOW_STATS", "INVENTORY", "DOLL_GUMP"
 };
 
@@ -424,9 +424,10 @@ bool KeyBinder::HandleEvent(const Common::Event *ev) {
 	KeyMap::iterator sdlkey_index = get_sdlkey_index(key);
 	if (sdlkey_index != _bindings.end())
 		return DoAction((*sdlkey_index)._value);
-
+	// Avoid modifier keys being detected as invalid input
 	if (ev->kbd.keycode != Common::KEYCODE_LALT && ev->kbd.keycode != Common::KEYCODE_RALT
-	        && ev->kbd.keycode != Common::KEYCODE_LCTRL && ev->kbd.keycode != Common::KEYCODE_RCTRL) {
+	        && ev->kbd.keycode != Common::KEYCODE_LCTRL && ev->kbd.keycode != Common::KEYCODE_RCTRL
+	        && ev->kbd.keycode != Common::KEYCODE_LSHIFT && ev->kbd.keycode != Common::KEYCODE_RSHIFT) {
 		handle_wrong_key_pressed();
 	}
 

@@ -124,6 +124,20 @@ void EclipseEngine::loadAssets() {
 	if (!isDemo() && !isEclipse2()) {
 		_areaMap[51]->addFloor();
 		_areaMap[51]->_paperColor = 1;
+
+		// Workaround for fixing some planar objects from area 9 that have null size
+		Object *obj = nullptr;
+		obj = _areaMap[9]->objectWithID(7);
+		assert(obj);
+		obj->_size = 32 * Math::Vector3d(3, 0, 2);
+
+		obj = _areaMap[9]->objectWithID(8);
+		assert(obj);
+		obj->_size = 32 * Math::Vector3d(3, 0, 2);
+
+		obj = _areaMap[9]->objectWithID(9);
+		assert(obj);
+		obj->_size = 32 * Math::Vector3d(3, 0, 2);
 	}
 }
 
@@ -220,7 +234,7 @@ void EclipseEngine::initKeymaps(Common::Keymap *engineKeyMap, Common::Keymap *in
 	act->addDefaultInputMapping("w");
 	engineKeyMap->addAction(act);
 
-	// I18N: Illustrates the angle at which you turn left or right. 
+	// I18N: Illustrates the angle at which you turn left or right.
 	act = new Common::Action("CHNGANGLE", _("Change Angle"));
 	act->setCustomEngineActionEvent(kActionChangeAngle);
 	act->addDefaultInputMapping("a");
@@ -268,12 +282,8 @@ void EclipseEngine::gotoArea(uint16 areaID, int entranceID) {
 	_lastPosition = _position;
 
 	if (areaID == _startArea && entranceID == _startEntrance) {
-		_yaw = 180;
-		_pitch = 0;
-
 		playSound(_soundIndexStart, true);
 		if (isEclipse2()) {
-			_yaw = 120;
 			_gameStateControl = kFreescapeGameStateStart;
 		}
 

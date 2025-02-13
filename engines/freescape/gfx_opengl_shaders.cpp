@@ -52,7 +52,7 @@ OpenGLShaderRenderer::OpenGLShaderRenderer(int screenW, int screenH, Common::Ren
 	_bitmapShader = nullptr;
 	_bitmapVBO = 0;
 
-	_texturePixelFormat = OpenGLTexture::getRGBAPixelFormat();
+	_texturePixelFormat = getRGBAPixelFormat();
 	_isAccelerated = true;
 }
 
@@ -64,7 +64,7 @@ OpenGLShaderRenderer::~OpenGLShaderRenderer() {
 	free(_verts);
 }
 
-Texture *OpenGLShaderRenderer::createTexture(const Graphics::Surface *surface) {
+Texture *OpenGLShaderRenderer::createTexture(const Graphics::Surface *surface, bool is3D) {
 	return new OpenGLTexture(surface);
 }
 
@@ -94,6 +94,10 @@ void OpenGLShaderRenderer::init() {
 	_bitmapVBO = OpenGL::Shader::createBuffer(GL_ARRAY_BUFFER, sizeof(bitmapVertices), bitmapVertices);
 	_bitmapShader->enableVertexAttribute("position", _bitmapVBO, 2, GL_FLOAT, GL_TRUE, 2 * sizeof(float), 0);
 	_bitmapShader->enableVertexAttribute("texcoord", _bitmapVBO, 2, GL_FLOAT, GL_TRUE, 2 * sizeof(float), 0);
+
+	// populate default stipple data for shader rendering
+	for(int i = 0; i < 128; i++)
+		_defaultShaderStippleArray[i] = _defaultStippleArray[i];
 
 	glDisable(GL_TEXTURE_2D);
 	glEnable(GL_DEPTH_TEST);
@@ -136,13 +140,10 @@ void OpenGLShaderRenderer::drawTexturedRect2D(const Common::Rect &screenRect, co
 	_bitmapShader->unbind();
 }
 
-void OpenGLShaderRenderer::updateProjectionMatrix(float fov, float yminValue, float ymaxValue, float nearClipPlane, float farClipPlane) {
-	// Determining xmaxValue and ymaxValue still needs some work for matching the 3D view in freescape games
-	/*float aspectRatio = _screenW / (float)_screenH;
-	float xmaxValue = nearClipPlane * tan(Common::deg2rad(fov) / 2);
+void OpenGLShaderRenderer::updateProjectionMatrix(float fov, float aspectRatio, float nearClipPlane, float farClipPlane) {
+	float xmaxValue = nearClipPlane * tan(Math::deg2rad(fov) / 2);
 	float ymaxValue = xmaxValue / aspectRatio;
-	_projectionMatrix = Math::makeFrustumMatrix(xmaxValue, -xmaxValue, -ymaxValue, ymaxValue, nearClipPlane, farClipPlane);*/
-	_projectionMatrix = Math::makeFrustumMatrix(1.5, -1.5, yminValue, ymaxValue, nearClipPlane, farClipPlane);
+	_projectionMatrix = Math::makeFrustumMatrix(xmaxValue, -xmaxValue, -ymaxValue, ymaxValue, nearClipPlane, farClipPlane);
 }
 
 void OpenGLShaderRenderer::positionCamera(const Math::Vector3d &pos, const Math::Vector3d &interest) {
@@ -452,29 +453,32 @@ void OpenGLShaderRenderer::polygonOffset(bool enabled) {
 }
 
 void OpenGLShaderRenderer::setStippleData(byte *data) {
-	_triangleShader->use();
 	if (!data)
-		return;
+		data = _defaultStippleArray;
 
-	int stippleData[128];
-
-	for (int i = 0; i < 128; i++) {
-		stippleData[i] = 0;
-		stippleData[i] = data[i];
-	}
-	_triangleShader->setUniform("stipple", 128, (const int*)&stippleData);
+	for (int i = 0; i < 128; i++)
+		_variableStippleArray[i] = data[i];
 }
 
 void OpenGLShaderRenderer::useStipple(bool enabled) {
 	_triangleShader->use();
+	_triangleShader->setUniform("useStipple", enabled);
+
 	if (enabled) {
+		GLfloat factor = 0;
+		glGetFloatv(GL_POLYGON_OFFSET_FACTOR, &factor);
 		glEnable(GL_POLYGON_OFFSET_FILL);
-		glPolygonOffset(0.0f, -1.0f);
-		_triangleShader->setUniform("useStipple", true);
+		glPolygonOffset(factor - 0.5f, -1.0f);
+		if (_renderMode == Common::kRenderZX    ||
+			_renderMode == Common::kRenderCPC   ||
+			_renderMode == Common::kRenderCGA   ||
+			_renderMode == Common::kRenderHercG)
+			_triangleShader->setUniform("stipple", 128, _variableStippleArray);
+		else
+			_triangleShader->setUniform("stipple", 128, _defaultShaderStippleArray);
 	} else {
 		glPolygonOffset(0, 0);
 		glDisable(GL_POLYGON_OFFSET_FILL);
-		_triangleShader->setUniform("useStipple", false);
 	}
 }
 
@@ -514,7 +518,7 @@ void OpenGLShaderRenderer::flipBuffer() {}
 Graphics::Surface *OpenGLShaderRenderer::getScreenshot() {
 	Common::Rect screen = viewport();
 	Graphics::Surface *s = new Graphics::Surface();
-	s->create(screen.width(), screen.height(), OpenGLTexture::getRGBAPixelFormat());
+	s->create(screen.width(), screen.height(), getRGBAPixelFormat());
 	glReadPixels(screen.left, screen.top, screen.width(), screen.height(), GL_RGBA, GL_UNSIGNED_BYTE, s->getPixels());
 	flipVertical(s);
 	return s;

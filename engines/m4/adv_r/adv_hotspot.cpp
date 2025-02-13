@@ -180,7 +180,7 @@ HotSpotRec *hotspot_add_dynamic(const char *verb, const char *noun,
 		error("hotspot_new failed");
 
 	hotspot_newVocab(hotspot, noun);
-	hotspot_newVocab(hotspot, verb);
+	hotspot_newVerb(hotspot, verb);
 	hotspot->feet_x = walkto_x;
 	hotspot->feet_y = walkto_y;
 	hotspot->cursor_number = cursor;
@@ -284,7 +284,7 @@ void hotspot_set_active(HotSpotRec *head, const char *name, bool active_or_not) 
 	cstrupr(name_str);
 
 	for (i = head; i; i = i->next) {
-		if (!scumm_strnicmp(i->vocab, name_str, MAX_FILENAME_SIZE)) {
+		if (i->vocab && !scumm_strnicmp(i->vocab, name_str, MAX_FILENAME_SIZE)) {
 			i->active = active_or_not;
 			hotspot_found = true;
 		}

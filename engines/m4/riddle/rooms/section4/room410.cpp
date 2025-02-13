@@ -79,18 +79,18 @@ void Room410::daemon() {
 
 	case 104:
 		series_stream_break_on_frame(_pu, 102, 105);
-		series_stream_check_series(_pu, 5);
+		series_set_frame_rate(_pu, 5);
 		digi_play("410r01", 1);
 		break;
 
 	case 105:
 		series_stream_break_on_frame(_pu, 116, 110);
-		series_stream_check_series(_pu, 3000);
+		series_set_frame_rate(_pu, 3000);
 		digi_play("410t01", 1, 255, 106);
 		break;
 
 	case 106:
-		series_stream_check_series(_pu, 7);
+		series_set_frame_rate(_pu, 7);
 		ws_OverrideCrunchTime(_pu);
 		break;
 
@@ -108,6 +108,12 @@ void Room410::daemon() {
 		terminateMachineAndNull(_pu);
 		_pu = series_stream("410PU02", 7, 0x100, -1);
 		series_stream_break_on_frame(_pu, 8, 125);
+
+		// WORKAROUND: Way back up in the stack, the original _pu's anim
+		// is what called daemon. So we need to flag for it to bail out,
+		// so it doesn't try to use freed memory
+		_GWS(keepProcessing) = false;
+		_GWS(bailOut) = true;
 		break;
 
 	case 125:
@@ -116,7 +122,7 @@ void Room410::daemon() {
 		break;
 
 	case 127:
-		series_stream_check_series(_pu, 3000);
+		series_set_frame_rate(_pu, 3000);
 		break;
 
 	case 225:
@@ -128,7 +134,7 @@ void Room410::daemon() {
 		break;
 
 	case 300:
-		series_stream_check_series(_pu, 3000);
+		series_set_frame_rate(_pu, 3000);
 		kernel_timing_trigger(1, 305);
 		disable_player_commands_and_fade_init(-1);
 		break;

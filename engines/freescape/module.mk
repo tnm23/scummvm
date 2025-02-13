@@ -3,15 +3,18 @@ MODULE := engines/freescape
 MODULE_OBJS := \
 	area.o \
 	assets.o \
+	font.o \
 	events.o \
 	demo.o \
 	freescape.o \
 	games/castle/castle.o \
 	games/castle/amiga.o \
+	games/castle/cpc.o \
 	games/castle/dos.o \
 	games/castle/zx.o \
 	games/dark/amiga.o \
 	games/dark/atari.o \
+	games/dark/c64.o \
 	games/dark/cpc.o \
 	games/dark/dark.o \
 	games/dark/dos.o \

@@ -96,12 +96,13 @@ public:
 	int16 getGameMinsToAddOnObjInteraction() const { return _gameMinsToAddOnObjInteraction; }
 	int16 getGameIsInteractiveGlobal() { return _gameIsInteractiveGlobal; }
 
-	void setLastSceneNum(int16 num) { _lastOpcode1SceneChageNum = num; }
+	void setLastSceneNum(int16 num) { _lastOpcode1SceneChangeNum = num; }
+	int16 getLastSceneNum() const { return _lastOpcode1SceneChangeNum; }
 
 protected:
 
 	// these ones seem to be common between games
-	int16 _lastOpcode1SceneChageNum;
+	int16 _lastOpcode1SceneChangeNum;
 	int16 _sceneOp12SceneNum;
 	int16 _currentSelectedItem;
 	int16 _gameMinsToAddOnLClick;
@@ -164,26 +165,32 @@ public:
 	int16 getNativeGameState() const { return _nativeGameState; }
 	void setNativeGameState(int16 state) { _nativeGameState = state; }
 
+	int16 getTrainState() const { return _trainState; }
+	void setTrainState(int16 state) { _trainState = state; }
+
+	int16 getIntroState() const { return _introState; }
+	void setIntroState(int16 state) { _introState = state; }
+
 private:
 	// HoC-specific globals
-	int16 _unk39;
-	int16 _unk40;
-	int16 _unk41;
+	int16 _introState;
+	int16 _startScene;
+	int16 _trainState;
 	int16 _shellPea;
 	int16 _shellBet;
 	int16 _sheckels;
 	int16 _unk45;
 	int16 _unk46;
 	int16 _unk47;
-	int16 _unk48;
+	int16 _tankState;
 	int16 _nativeGameState; // state for the shell game, tank game, etc.
-	int16 _unk50;
+	int16 _tankFinished;
 	int16 _currentCharacter;
 	int16 _currentCharacter2;
 	int16 _unkDlgDlgNum;
 	int16 _unkDlgFileNum;
 	int16 _unk55;
-	int16 _unk82;
+	int16 _difficultyLevel;
 
 	Common::Error syncState(Common::Serializer &s) override;
 };
@@ -192,18 +199,25 @@ class WillyGlobals : public Globals {
 public:
 	WillyGlobals(Clock &clock);
 
+	void setPalFade(int16 val) { _palFade = val; }
+	int16 getPalFade() const { return _palFade; }
+
+	void setDroppedItemNum(int16 val) { _droppedItemNum = val; }
+	bool isHideMouseCursor() const { return _hideMouseCursor != 0; }
+	bool isDrawTimeSkipButtons() const { return _invDrawTimeSkipButtons != 0; }
+
 private:
 	// Willy-specific globals
-	int16 _unk2;
-	int16 _unk3;
-	int16 _unk4;
-	int16 _unk5;
+	int16 _trouble;
+	int16 _money;
+	int16 _invDrawTimeSkipButtons;
+	int16 _hideMouseCursor;
 	int16 _unk74;
 	int16 _unk75;
-	int16 _unk77;
-	int16 _unk78;
-	int16 _unk79;
-	int16 _unk80;
+	int16 _palFade;
+	int16 _droppedItemNum;
+	int16 _characterStance;
+	int16 _characterPos;
 	int16 _unk81;
 	int16 _unk82;
 

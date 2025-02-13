@@ -96,6 +96,7 @@ static const PlainGameDescriptor wintermuteGames[] = {
 	{"imustkill",       "I Must Kill...: Fresh Meat"},
 	{"jamesperis",      "James Peris: No License Nor Control"},
 	{"jamesperis2",     "James Peris 2: The Fountain of Eternal Drunkenness"},
+	{"keshaskazok",     "Кеша в мире сказок"},
 	{"klaymen1",        "Klaymen Episodes: Pilot"},
 	{"knossos",         "K'NOSSOS"},
 	{"kulivocko",       "Kulivocko"},
@@ -460,7 +461,7 @@ static const WMEGameDescription gameDescriptions[] = {
 
 	// Awakening: Burning Ashes (Hayoola) (Persian)
 	WME_WINENTRY("awakening", "",
-		WME_ENTRY1s("data.dcp", "a7b8633fdc5cc8ff659dda5a11d3d971", 1900777616), Common::FA_IRN, ADGF_UNSTABLE | GF_3D, WME_1_9_3),
+		WME_ENTRY1s("data.dcp", "a7b8633fdc5cc8ff659dda5a11d3d971", 1900777616), Common::FA_IRN, ADGF_UNSTABLE, WME_1_9_3),
 
 	// El Engaño de Barbapoca Chapter 1: Esta Pizza Esta de Muerte (Spanish)
 	WME_WINENTRY("barbapoca1", "",
@@ -1707,6 +1708,10 @@ static const WMEGameDescription gameDescriptions[] = {
 	WME_WINENTRY("juliauntold", "GOG.com",
 		WME_ENTRY1s("data.dcp", "b0aefd82647a26425fe3ee21aabb6283", 26462676), Common::EN_ANY, ADGF_UNSTABLE, WME_LITE),
 
+	// Kesha v Mire skazok (Kesha in the World of Fairy Tales)
+	WME_WINENTRY("keshaskazok", "",
+		WME_ENTRY1s("common.dcp", "5161e6aacc79471563f2af4cf1ed1d7c", 31509010), Common::RU_RUS, ADGF_UNSTABLE, WME_1_5_2),
+
 	// Klaymen Episodes: Pilot
 	WME_WINENTRY("klaymen1", "",
 		WME_ENTRY1s("data.dcp", "8a066d13d32567ca88a6918bfa3c01fa", 17086470), Common::EN_ANY, ADGF_UNSTABLE, WME_1_8_6),
@@ -1761,11 +1766,11 @@ static const WMEGameDescription gameDescriptions[] = {
 
 	// Limbo of the Lost (English)
 	WME_WINENTRY("lotl", "",
-		WME_ENTRY1s("data.dcp", "637f2195a08f59e809ca48194a2ee73d", 354879400), Common::EN_ANY, ADGF_UNSTABLE | GF_3D, WME_1_7_2),
+		WME_ENTRY1s("data.dcp", "637f2195a08f59e809ca48194a2ee73d", 354879400), Common::EN_ANY, ADGF_UNSTABLE, WME_1_7_2),
 
 	// Limbo of the Lost (Russian)
 	WME_WINENTRY("lotl", "",
-		WME_ENTRY1s("data.dcp", "2042ea14f2d7c52a139d768e962040c1", 354370575), Common::RU_RUS, ADGF_UNSTABLE | GF_3D, WME_1_7_2),
+		WME_ENTRY1s("data.dcp", "2042ea14f2d7c52a139d768e962040c1", 354370575), Common::RU_RUS, ADGF_UNSTABLE, WME_1_7_2),
 
 	// Tale of The Lost Bride and A Hidden Treasure (Russian)
 	WME_WINENTRY("lostbride", "",
@@ -4195,6 +4200,11 @@ static const WMEGameDescription gameDescriptions[] = {
 		WME_ENTRY2s("data.dcp", "ca788ebe1b607c24c3e4db4771c16559", 1806937971,
 					"xlanguage_zh_t.dcp", "6ca6a83edad54ec1c384fbcea2989ee4", 10170999), Common::ZH_TWN, ADGF_UNSTABLE, WME_1_9_2),
 
+	// Reversion: The Return (Steam, December 2022) (French)
+	WME_WINENTRY("reversion3", "Steam",
+		WME_ENTRY2s("data.dcp", "ca788ebe1b607c24c3e4db4771c16559", 1806937971,
+					"xlanguage_fr.dcp", "95e120a88b3205e8b58f71060c34e713", 10251638), Common::FR_FRA, ADGF_UNSTABLE, WME_1_9_2),
+
 	// Rhiannon: Curse of the four Branches
 	WME_WINENTRY("rhiannon", "",
 		WME_ENTRY1s("data.dcp", "870f348900b735f1cc79c0608ce32b0e", 1046169851), Common::EN_ANY, ADGF_UNSTABLE, WME_1_8_6),
@@ -5608,7 +5618,7 @@ static const WMEGameDescription gameDescriptions[] = {
 
 	// Today, Mama!
 	WME_WINENTRY("todaymama", "",
-		WME_ENTRY1s("data.dcp", "b89e4a2000109f21d1aba10ef0920180", 1266324389), Common::RU_RUS, ADGF_UNSTABLE | GF_3D, WME_1_7_3),
+		WME_ENTRY1s("data.dcp", "b89e4a2000109f21d1aba10ef0920180", 1266324389), Common::RU_RUS, ADGF_UNSTABLE, WME_1_7_3),
 
 	// Vsevolod Prologue (Demo)
 	WME_WINENTRY("vsevolod", "Prologue",

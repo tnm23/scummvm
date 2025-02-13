@@ -41,7 +41,7 @@ void Room604::init() {
 		_val2 = 0;
 		_val3 = 0;
 		_val4 = 0;
-		_val5 = 0;
+		_suppressChatter = false;
 	}
 
 	static const char *DIGI[14] = {
@@ -137,14 +137,14 @@ void Room604::init() {
 
 		_shedDoor = series_show("SHED DOOR OPENS", 0xf00, 16);
 
-		if (_G(flags)[GLB_TEMP_5])
+		if (_G(flags)[V011])
 			digi_preload("genrun");
 		break;
 
 	case 603:
 		player_set_commands_allowed(false);
 		_shedDoor = series_play("SHED DOOR OPENS", 0xf00, 16, 50, 11);
-		ws_demand_location(156, 338, 3);
+		ws_demand_location(_G(my_walker), 156, 338, 3);
 		digi_play("DOOROPEN", 2);
 		break;
 
@@ -152,14 +152,14 @@ void Room604::init() {
 		_shedDoor = series_show("SHED DOOR OPENS", 0xf00, 16);
 
 		if (_G(flags)[V203] == 8) {
-			ws_demand_location(380, 304, 3);
+			ws_demand_location(_G(my_walker), 380, 304, 3);
 			ws_hide_walker();
 			series_load("rip crawls through window");
 			_ripley = series_play("RIP CRAWLS THROUGH WINDOW", 0x100, 2, 10, 6);
 			player_set_commands_allowed(false);
 
 		} else {
-			ws_demand_location(381, 329, 10);
+			ws_demand_location(_G(my_walker), 381, 329, 10);
 		}
 		break;
 	}
@@ -167,7 +167,7 @@ void Room604::init() {
 	series_load("the generator cord");
 	_generatorCord = series_show_sprite("the generator cord", 0, 0xf00);
 
-	if (_G(flags)[GLB_TEMP_5])
+	if (_G(flags)[V011])
 		digi_play_loop("genrun", 3);
 }
 
@@ -177,7 +177,7 @@ void Room604::daemon() {
 	switch (_G(kernel).trigger) {
 	case 10:
 		ws_unhide_walker();
-		ws_walk(374, 330, nullptr, 11, 10);
+		ws_walk(_G(my_walker), 374, 330, nullptr, 11, 10);
 		break;
 
 	case 11:
@@ -190,7 +190,7 @@ void Room604::daemon() {
 		break;
 
 	case 50:
-		ws_walk(238, 339, nullptr, 52, 3);
+		ws_walk(_G(my_walker), 238, 339, nullptr, 52, 3);
 		break;
 
 	case 52:
@@ -233,7 +233,7 @@ void Room604::pre_parser() {
 		intr_freshen_sentence(65);
 	if (useFlag && player_said("WHALE BONE HORN") && _G(flags)[V203] == 8) {
 		digi_stop(3);
-		_val5 = 1;
+		_suppressChatter = true;
 	}
 
 	if (_val2) {
@@ -256,12 +256,12 @@ void Room604::parser() {
 		// No implementation
 	} else if (player_said("kill rip")) {
 		killRipley();
-	} else if (takeFlag && player_said("PULL CORD") && takePullCord()) {
-		// No implementation
+	} else if (takeFlag && player_said("PULL CORD")) {
+		takePullCord();
 	} else if (player_said("PULL CORD", "generator set")) {
 		switch (_G(kernel).trigger) {
 		case -1:
-			ws_walk(362, 316, nullptr, 1, 1);
+			ws_walk(_G(my_walker), 362, 316, nullptr, 1, 1);
 			break;
 		case 1:
 			player_set_commands_allowed(false);
@@ -284,8 +284,8 @@ void Room604::parser() {
 		digi_play("com118", 1, 255, -1, 997);
 	} else if (player_said("SPARK PLUG TOOL", "GAS TANK")) {
 		digi_play("com011", 1, 255, -1, 997);
-	} else if (takeFlag && player_said("SPARK PLUG TOOL") && takeSparkPlugTool()) {
-		// No implementation
+	} else if (takeFlag && player_said("SPARK PLUG TOOL")) {
+		takeSparkPlugTool();
 	} else if (useFlag && player_said("generator set") &&
 			!inv_object_is_here("PULL CORD")) {
 		digi_play("604r43", 1);
@@ -306,23 +306,23 @@ void Room604::parser() {
 		} else {
 			digi_play_loop("genrun", 3);
 		}
-	} else if (useFlag && player_said("generator set") && _G(flags)[GLB_TEMP_5]) {
+	} else if (useFlag && player_said("generator set") && _G(flags)[V011]) {
 		digi_play("com115", 1, 255, -1, 997);
 	} else if (useFlag && (
 		(player_said("PULL CORD") && inv_object_is_here("PULL CORD")) ||
 		(player_said("generator set") && inv_object_is_here("PULL CORD"))
 	)) {
-		if (_G(flags)[GLB_TEMP_5]) {
+		if (_G(flags)[V011]) {
 			digi_play("com115", 1);
 		} else {
 			switch (_G(kernel).trigger) {
 			case -1:
-				ws_walk(357, 311, nullptr, 1, 1);
+				ws_walk(_G(my_walker), 357, 311, nullptr, 1, 1);
 				break;
 			case 1:
 				if (_G(flags)[V203] == 8) {
 					digi_stop(3);
-					_val5 = 1;
+					_suppressChatter = true;
 				}
 
 				player_set_commands_allowed(false);
@@ -350,7 +350,7 @@ void Room604::parser() {
 					kernel_timing_trigger(180, 3);
 				} else {
 					player_set_commands_allowed(true);
-					_G(flags)[GLB_TEMP_5] = 1;
+					_G(flags)[V011] = 1;
 				}
 				break;
 
@@ -360,7 +360,7 @@ void Room604::parser() {
 				break;
 
 			case 4:
-				ws_walk(381, 329, nullptr, 5, 9);
+				ws_walk(_G(my_walker), 381, 329, nullptr, 5, 9);
 				break;
 
 			case 5:
@@ -445,7 +445,7 @@ void Room604::parser() {
 
 			if (_G(flags)[V203] == 8) {
 				digi_stop(3);
-				_val5 = 1;
+				_suppressChatter = true;
 			}
 
 			digi_play("wirepull", 2, 255, 2);
@@ -489,7 +489,7 @@ void Room604::parser() {
 		if (_G(flags)[V203] == 8) {
 			switch (_G(kernel).trigger) {
 			case -1:
-				ws_walk(331, 323, nullptr, 1, 10);
+				ws_walk(_G(my_walker), 331, 323, nullptr, 1, 10);
 				break;
 			case 1:
 				player_set_commands_allowed(false);
@@ -499,19 +499,34 @@ void Room604::parser() {
 				if (player_said("LIGHTER"))
 					kernel_timing_trigger(40, 3);
 				break;
+			case 2:
+				_flame = series_play("FLAME ON FLOOR", 0xd00, 4, -1, 5, -1, 100, 0, 0, 0, 7);
+				hotspot_set_active("LIGHTER", true);
+				inv_move_object("LIGHTER", 604);
+				inv_move_object("LIT LIGHTER", NOWHERE);
+				sendWSMessage_140000(5);
+				break;
+			case 3:
+				digi_play("604_s01", 2);
+				break;
+			case 5:
+				player_set_commands_allowed(true);
+				break;
+			default:
+				break;
 			}
 		} else {
 			digi_play("com118", 1, 255, -1, 997);
 		}
-	} else if (takeFlag && player_said("LIGHTER") && takeLighter()) {
-		// No implementation
-	} else if (player_said("pull cord", "plug") && pullCordPlug()) {
-		// No implementation
+	} else if (takeFlag && player_said("LIGHTER")) {
+		takeLighter();
+	} else if (player_said("pull cord", "plug")) {
+		pullCordPlug();
 	} else if (player_said("plug", "pull cord  ")) {
 		switch (_G(kernel).trigger) {
 		case -1:
 			if (_G(flags)[V190])
-				ws_walk(289, 312, nullptr, 1, 11);
+				ws_walk(_G(my_walker), 289, 312, nullptr, 1, 11);
 			else
 				digi_play("604r12", 1);
 			break;
@@ -608,6 +623,7 @@ void Room604::parser() {
 			hotspot_set_active("WIRE ", true);
 			kernel_load_variant("604lock1");
 			digi_play("604r48", 1);
+			player_set_commands_allowed(true);
 			break;
 		default:
 			break;
@@ -683,12 +699,14 @@ void Room604::parser() {
 			case 1:
 				adv_kill_digi_between_rooms(false);
 
-				if (_G(flags)[GLB_TEMP_5]) {
+				if (_G(flags)[V011]) {
 					digi_play_loop("genrun", 3);
 				} else {
 					digi_preload("950_s28");
 					digi_play_loop("950_s28", 3);
 				}
+
+				_G(game).setRoom(603);
 				break;
 			default:
 				break;
@@ -780,11 +798,11 @@ bool Room604::useWhaleBoneHorn() {
 	switch (_G(kernel).trigger) {
 	case 5:
 		_ripley = series_play("BAD GUYS LOOK TO SHED", 0, 0, 6, 6);
-		break;
+		return true;
 
 	case 6:
 		kernel_timing_trigger(30, 7);
-		break;
+		return true;
 
 	case 7:
 		digi_play("604k01", 1);
@@ -797,10 +815,8 @@ bool Room604::useWhaleBoneHorn() {
 		return true;
 
 	default:
-		break;
+		return false;
 	}
-
-	return false;
 }
 
 void Room604::killRipley() {
@@ -821,7 +837,7 @@ void Room604::killRipley() {
 			}
 		}
 
-		ws_walk(381, 329, nullptr, 3, 9);
+		ws_walk(_G(my_walker), 381, 329, nullptr, 3, 9);
 		break;
 
 	case 2:
@@ -966,7 +982,7 @@ void Room604::killRipley() {
 	}
 }
 
-bool Room604::takePullCord() {
+void Room604::takePullCord() {
 	switch (_G(kernel).trigger) {
 	case -1:
 		if (inv_object_is_here("PULL CORD") && !_G(flags)[V189]) {
@@ -980,7 +996,7 @@ bool Room604::takePullCord() {
 		terminateMachineAndNull(_pullCord1);
 		hotspot_set_active("PULL CORD", false);
 		inv_give_to_player("PULL CORD");
-		kernel_examine_inventory_object("ping pull cord", 5, 1, 312, 350, 3);
+		kernel_examine_inventory_object("ping pull cord", 5, 1, 312, 250, 3);
 		break;
 
 	case 3:
@@ -994,18 +1010,16 @@ bool Room604::takePullCord() {
 	default:
 		break;
 	}
-
-	return false;
 }
 
-bool Room604::takeSparkPlugTool() {
+void Room604::takeSparkPlugTool() {
 	switch (_G(kernel).trigger) {
 	case -1:
 		if (inv_object_is_here("SPARK PLUG TOOL")) {
 			player_set_commands_allowed(false);
 			setGlobals1(_ripLowReach1, 1, 10, 10, 10);
 			sendWSMessage_110000(2);
-			return true;
+			break;
 		}
 		break;
 
@@ -1015,21 +1029,19 @@ bool Room604::takeSparkPlugTool() {
 		kernel_examine_inventory_object("ping spark plug tool",
 			5, 1, 282, 247, 3);
 		terminateMachineAndNull(_sparkPlugTool);
-		return true;
+		break;
 
 	case 3:
 		sendWSMessage_140000(5);
-		return true;
+		break;
 
 	case 5:
 		player_set_commands_allowed(true);
-		return true;
+		break;
 
 	default:
 		break;
 	}
-
-	return false;
 }
 
 void Room604::takeWire() {
@@ -1063,13 +1075,13 @@ void Room604::takeWire() {
 	}
 }
 
-bool Room604::takeLighter() {
+void Room604::takeLighter() {
 	switch (_G(kernel).trigger) {
 	case -1:
 		if (!inv_object_is_here("LIGHTER"))
-			return false;
+			return;
 
-		ws_walk(331, 323, nullptr, 1, 10);
+		ws_walk(_G(my_walker), 331, 323, nullptr, 1, 10);
 		break;
 
 	case 1:
@@ -1090,19 +1102,17 @@ bool Room604::takeLighter() {
 		break;
 
 	default:
-		return false;
+		break;
 	}
-
-	return true;
 }
 
-bool Room604::pullCordPlug() {
+void Room604::pullCordPlug() {
 	switch (_G(kernel).trigger) {
 	case -1:
 		if (_G(flags)[V190]) {
 			if (!inv_player_has("PULL CORD"))
-				return false;
-			ws_walk(289, 312, nullptr, 1, 11);
+				return;
+			ws_walk(_G(my_walker), 289, 312, nullptr, 1, 11);
 		} else {
 			digi_play("604r12", 1);
 		}
@@ -1126,17 +1136,16 @@ bool Room604::pullCordPlug() {
 
 	case 5:
 		sendWSMessage_150000(-1);
+		player_set_commands_allowed(true);
 		break;
 
 	default:
-		return false;
+		break;
 	}
-
-	return true;
 }
 
 void Room604::daemon1() {
-	if (_val5)
+	if (_suppressChatter)
 		return;
 
 	static const char *DIGI[3] = { "610_s03a", "610_s03b", "610_s03" };

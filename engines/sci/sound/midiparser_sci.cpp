@@ -51,11 +51,13 @@ MidiParser_SCI::MidiParser_SCI(SciVersion soundVersion, SciMusic *music) :
 	_ppqn = 1;
 	setTempo(16667);
 
+	_track = nullptr;
+	_pSnd = nullptr;
+	_loopTick = 0;
 	_masterVolume = 15;
 	_volume = 127;
 
 	_resetOnPause = false;
-	_pSnd = nullptr;
 
 	_mainThreadCalled = false;
 
@@ -110,7 +112,8 @@ bool MidiParser_SCI::loadMusic(SoundResource::Track *track, MusicEntry *psnd, in
 	}
 
 	_numTracks = 1;
-	_tracks[0] = const_cast<byte *>(_mixedData->data());
+	_numSubtracks[0] = 1;
+	_tracks[0][0] = const_cast<byte *>(_mixedData->data());
 	if (_pSnd)
 		setTrack(0);
 	_loopTick = 0;
@@ -165,7 +168,7 @@ void MidiParser_SCI::midiMixChannels() {
 	SciSpan<byte> outData = _mixedData->allocate(totalSize * 2, Common::String::format("mixed sound.%d", _pSnd ? _pSnd->resourceId : -1)); // FIXME: creates overhead and still may be not enough to hold all data
 
 	long ticker = 0;
-	byte channelNr, curDelta;
+	byte channelNr;
 	byte midiCommand = 0, midiParam, globalPrev = 0;
 	long newDelta;
 	SoundResource::Channel *channel;
@@ -175,7 +178,7 @@ void MidiParser_SCI::midiMixChannels() {
 		channel = &_track->channels[channelNr];
 		if (!validateNextRead(channel))
 			break;
-		curDelta = channel->data[channel->curPos++];
+		byte curDelta = channel->data[channel->curPos++];
 		channel->time += (curDelta == 0xF8 ? 240 : curDelta); // when the command is supposed to occur
 		if (curDelta == 0xF8)
 			continue;
@@ -628,33 +631,37 @@ void MidiParser_SCI::trackState(uint32 b) {
 }
 
 void MidiParser_SCI::parseNextEvent(EventInfo &info) {
-	info.start = _position._playPos;
+	byte *playPos = _position._subtracks[0]._playPos;
+
+	info.start = playPos;
 	info.delta = 0;
-	while (*_position._playPos == 0xF8) {
+	while (*playPos == 0xF8) {
 		info.delta += 240;
-		_position._playPos++;
+		playPos++;
 	}
-	info.delta += *(_position._playPos++);
+	info.delta += *(playPos++);
 
 	// Process the next info.
-	if ((_position._playPos[0] & 0xF0) >= 0x80)
-		info.event = *(_position._playPos++);
+	if ((playPos[0] & 0xF0) >= 0x80)
+		info.event = *(playPos++);
 	else
-		info.event = _position._runningStatus;
-	if (info.event < 0x80)
+		info.event = _position._subtracks[0]._runningStatus;
+	if (info.event < 0x80) {
+		_position._subtracks[0]._playPos = playPos;
 		return;
+	}
 
-	_position._runningStatus = info.event;
+	_position._subtracks[0]._runningStatus = info.event;
 	switch (info.command()) {
 	case 0xC:
 	case 0xD:
-		info.basic.param1 = *(_position._playPos++);
+		info.basic.param1 = *(playPos++);
 		info.basic.param2 = 0;
 		break;
 
 	case 0xB:
-		info.basic.param1 = *(_position._playPos++);
-		info.basic.param2 = *(_position._playPos++);
+		info.basic.param1 = *(playPos++);
+		info.basic.param2 = *(playPos++);
 		info.length = 0;
 		break;
 
@@ -662,8 +669,8 @@ void MidiParser_SCI::parseNextEvent(EventInfo &info) {
 	case 0x9:
 	case 0xA:
 	case 0xE:
-		info.basic.param1 = *(_position._playPos++);
-		info.basic.param2 = *(_position._playPos++);
+		info.basic.param1 = *(playPos++);
+		info.basic.param2 = *(playPos++);
 		if (info.command() == 0x9 && info.basic.param2 == 0) {
 			// NoteOn with param2==0 is a NoteOff
 			info.event = info.channel() | 0x80;
@@ -674,12 +681,12 @@ void MidiParser_SCI::parseNextEvent(EventInfo &info) {
 	case 0xF: // System Common, Meta or SysEx event
 		switch (info.event & 0x0F) {
 		case 0x2: // Song Position Pointer
-			info.basic.param1 = *(_position._playPos++);
-			info.basic.param2 = *(_position._playPos++);
+			info.basic.param1 = *(playPos++);
+			info.basic.param2 = *(playPos++);
 			break;
 
 		case 0x3: // Song Select
-			info.basic.param1 = *(_position._playPos++);
+			info.basic.param1 = *(playPos++);
 			info.basic.param2 = 0;
 			break;
 
@@ -693,16 +700,16 @@ void MidiParser_SCI::parseNextEvent(EventInfo &info) {
 			break;
 
 		case 0x0: // SysEx
-			info.length = readVLQ(_position._playPos);
-			info.ext.data = _position._playPos;
-			_position._playPos += info.length;
+			info.length = readVLQ(playPos);
+			info.ext.data = playPos;
+			playPos += info.length;
 			break;
 
 		case 0xF: // META event
-			info.ext.type = *(_position._playPos++);
-			info.length = readVLQ(_position._playPos);
-			info.ext.data = _position._playPos;
-			_position._playPos += info.length;
+			info.ext.type = *(playPos++);
+			info.length = readVLQ(playPos);
+			info.ext.data = playPos;
+			playPos += info.length;
 			break;
 		default:
 			warning(
@@ -713,6 +720,8 @@ void MidiParser_SCI::parseNextEvent(EventInfo &info) {
 	default:
 		break;
 	}// switch (info.command())
+
+	_position._subtracks[0]._playPos = playPos;
 }
 
 bool MidiParser_SCI::processEvent(const EventInfo &info, bool fireEvents) {
@@ -727,12 +736,16 @@ bool MidiParser_SCI::processEvent(const EventInfo &info, bool fireEvents) {
 			if (info.basic.param1 == kSetSignalLoop) {
 				_loopTick = _position._playTick;
 				// kSetSignalLoop (127) is not passed on to scripts, except in SCI_VERSION_0_EARLY.
-				// We also pass it to all versions of KQ4 because the scripts expect this. Sierra didn't
-				// update them when they changed the driver behavior. Introduction script 222 waits
-				// on signal 127 in sound 106 to start the game, causing later versions to wait forever.
+				// We also pass it to all versions of KQ4 when playing the introduction sound,
+				// because the KQ4 scripts expect it, and Sierra did not update the scripts when
+				// they changed the driver behavior. Script 222 waits on signal 127 in sound 106
+				// to start the game, causing later versions to wait forever.
 				// Now the introduction correctly ends when the music does in all versions.
-				if (_soundVersion > SCI_VERSION_0_EARLY && g_sci->getGameId() != GID_KQ4) {
-					return true;
+				// We must only apply this to sound 106, because Amiga adds signal 127 to others.
+				if (_soundVersion > SCI_VERSION_0_EARLY) {
+					if (!(g_sci->getGameId() == GID_KQ4 && _pSnd->resourceId == 106)) {
+						return true;
+					}
 				}
 			}
 

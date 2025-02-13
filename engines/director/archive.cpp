@@ -144,6 +144,10 @@ Common::SeekableReadStreamEndian *Archive::getFirstResource(uint32 tag) {
 	return getResource(tag, getResourceIDList(tag)[0]);
 }
 
+Common::SeekableReadStreamEndian *Archive::getFirstResource(uint32 tag, uint16 parentId) {
+	return getResource(tag, getResourceIDList(tag)[0]);
+}
+
 Common::SeekableReadStreamEndian *Archive::getResource(uint32 tag, uint16 id) {
 	if (!_types.contains(tag))
 		error("Archive::getResource(): Archive does not contain '%s' %d", tag2str(tag), id);
@@ -602,7 +606,7 @@ bool RIFXArchive::openStream(Common::SeekableReadStream *stream, uint32 startOff
 		stream->seek(startOffset);
 
 		if (Common::MacResManager::isMacBinary(*stream)) {
-			warning("RIFXArchive::openStream(): MacBinary detected, overriding");
+			warning("RIFXArchive::openStream: MacBinary detected, overriding");
 
 			// We need to look at the resource fork to detect XCOD resources
 			Common::SeekableSubReadStream *macStream = new Common::SeekableSubReadStream(stream, 0, stream->size());
@@ -659,7 +663,7 @@ bool RIFXArchive::openStream(Common::SeekableReadStream *stream, uint32 startOff
 	}
 
 	_rifxType = endianStream.readUint32();
-	warning("RIFX: type: %s", tag2str(_rifxType));
+	debugC(1, kDebugLoading, "RIFX: type: %s", tag2str(_rifxType));
 
 	// Now read the memory map.
 	// At the same time, we will patch the offsets in the dump data.
@@ -725,12 +729,12 @@ bool RIFXArchive::openStream(Common::SeekableReadStream *stream, uint32 startOff
 			}
 		}
 
-		warning("No 'File' resource present in APPL archive");
+		warning("RIFXArchive::openStream: No 'File' resource present in APPL archive");
 		return false;
 	}
 
 	if (ConfMan.getBool("dump_scripts")) {
-		debug("RIFXArchive::openStream(): Dumping %d resources", _resources.size());
+		debug("RIFXArchive::openStream: Dumping %d resources", _resources.size());
 
 		Common::DumpFile out;
 
@@ -745,7 +749,7 @@ bool RIFXArchive::openStream(Common::SeekableReadStream *stream, uint32 startOff
 
 	// A KEY* must be present
 	if (!hasResource(MKTAG('K', 'E', 'Y', '*'), -1)) {
-		warning("No 'KEY*' resource present");
+		warning("RIFXArchive::openStream: No 'KEY*' resource present");
 	} else {
 		// Parse the KEY*
 		Common::SeekableReadStreamEndian *keyStream = getFirstResource(MKTAG('K', 'E', 'Y', '*'), true);
@@ -757,11 +761,10 @@ bool RIFXArchive::openStream(Common::SeekableReadStream *stream, uint32 startOff
 	uint32 casTag = MKTAG('C', 'A', 'S', '*');
 	if (_keyData.contains(casTag)) {
 		for (auto &it : _keyData[casTag]) {
-			uint32 libId = it._key - CAST_LIB_OFFSET;
 			for (auto &jt : it._value) {
 				if (Common::SeekableReadStreamEndian *casStream = getResource(casTag, jt)) {
 					Resource res = getResourceDetail(casTag, jt);
-					readCast(*casStream, libId);
+					readCast(*casStream, it._key);
 					delete casStream;
 				}
 			}
@@ -790,12 +793,12 @@ bool RIFXArchive::readMemoryMap(Common::SeekableReadStreamEndian &stream, uint32
 			dumpStream->writeUint32LE(mmapOffset - movieStartOffset);
 	}
 	uint32 version = stream.readUint32(); // 0 for 4.0, 0x4c1 for 5.0, 0x4c7 for 6.0, 0x708 for 8.5, 0x742 for 10.0
-	warning("mmap: mapversion: %d version: %x offset: 0x%x (%d)", mapversion, version, mmapOffset, mmapOffset);
+	debugC(2, kDebugLoading, "RIFXArchive::readMemoryMap: mapversion: %d version: %x offset: 0x%x (%d)", mapversion, version, mmapOffset, mmapOffset);
 
 	stream.seek(mmapOffset);
 
 	if (stream.readUint32() != MKTAG('m', 'm', 'a', 'p')) {
-		warning("RIFXArchive::readMemoryMap(): mmap expected but not found");
+		warning("RIFXArchive::readMemoryMap: mmap expected but not found");
 		return false;
 	}
 
@@ -840,7 +843,7 @@ bool RIFXArchive::readMemoryMap(Common::SeekableReadStreamEndian &stream, uint32
 	}
 
 	if (debugChannelSet(5, kDebugLoading)) {
-		debugC(5, kDebugLoading, "RIFXArchive::readMemoryMap(): Resources found:");
+		debugC(5, kDebugLoading, "RIFXArchive::readMemoryMap: Resources found:");
 		for (const auto &it : _types) {
 			debugC(5, kDebugLoading, "%s: %d", tag2str(it._key), it._value.size());
 		}
@@ -997,12 +1000,12 @@ bool RIFXArchive::readAfterburnerMap(Common::SeekableReadStreamEndian &stream, u
 	return true;
 }
 
-void RIFXArchive::readCast(Common::SeekableReadStreamEndian &casStream, uint16 libId) {
+void RIFXArchive::readCast(Common::SeekableReadStreamEndian &casStream, uint16 libResourceId) {
 	uint castTag = MKTAG('C', 'A', 'S', 't');
 
 	uint casSize = casStream.size() / 4;
 
-	debugCN(2, kDebugLoading, "CAS*: libId %d, %d members [", libId, casSize);
+	debugCN(2, kDebugLoading, "CAS*: libResourceId %d, %d members [", libResourceId, casSize);
 
 	for (uint i = 0; i < casSize; i++) {
 		uint32 castIndex = casStream.readUint32BE();
@@ -1013,7 +1016,7 @@ void RIFXArchive::readCast(Common::SeekableReadStreamEndian &casStream, uint16 l
 		}
 		Resource &res = _types[castTag][castIndex];
 		res.castId = i;
-		res.libId = libId;
+		res.libResourceId = libResourceId;
 	}
 	debugC(2, kDebugLoading, "]");
 }
@@ -1054,7 +1057,7 @@ void RIFXArchive::readKeyTable(Common::SeekableReadStreamEndian &keyStream) {
 		// The movie has the hardcoded ID 1024, which may collide with a cast member's ID
 		// when there are many chunks. This is not a problem since cast members and
 		// movies use different resource types, so we can tell them apart.
-		if (parentIndex == DEFAULT_CAST_LIB + CAST_LIB_OFFSET) {
+		if (parentIndex == 1024) {
 			_movieChunks.setVal(childTag, childIndex);
 		}
 	}
@@ -1067,6 +1070,17 @@ Common::SeekableReadStreamEndian *RIFXArchive::getFirstResource(uint32 tag) {
 Common::SeekableReadStreamEndian *RIFXArchive::getFirstResource(uint32 tag, bool fileEndianness) {
 	return getResource(tag, getResourceIDList(tag)[0], fileEndianness);
 }
+
+Common::SeekableReadStreamEndian *RIFXArchive::getFirstResource(uint32 tag, uint16 parentId) {
+	if (!_keyData.contains(tag))
+		return nullptr;
+	if (!_keyData[tag].contains(parentId))
+		return nullptr;
+	if (_keyData[tag][parentId].empty())
+		return nullptr;
+	return getResource(tag, _keyData[tag][parentId][0], false);
+}
+
 
 Common::SeekableReadStreamEndian *RIFXArchive::getResource(uint32 tag, uint16 id) {
 	return getResource(tag, id, false);

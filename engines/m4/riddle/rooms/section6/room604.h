@@ -34,7 +34,7 @@ private:
 	int _val2 = 0;
 	int _val3 = 0;
 	int _val4 = 0;
-	int _val5 = 0;
+	bool _suppressChatter = false;
 	int _ripLowReach1 = 0;
 	int _ripLowReach2 = 0;
 	int _ripMedReach1 = 0;
@@ -55,10 +55,10 @@ private:
 
 	void daemon1();
 	bool useWhaleBoneHorn();
-	bool takePullCord();
-	bool takeSparkPlugTool();
-	bool takeLighter();
-	bool pullCordPlug();
+	void takePullCord();
+	void takeSparkPlugTool();
+	void takeLighter();
+	void pullCordPlug();
 
 	/**
 	 * This Ripley is no more! It has ceased to be! It's expired

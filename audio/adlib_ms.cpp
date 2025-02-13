@@ -23,12 +23,12 @@
 
 #include "common/debug.h"
 
-bool OplInstrumentOperatorDefinition::isEmpty() {
+bool OplInstrumentOperatorDefinition::isEmpty() const {
 	return freqMultMisc == 0 && level == 0 && decayAttack == 0 &&
 		   releaseSustain == 0 && waveformSelect == 0;
 }
 
-bool OplInstrumentDefinition::isEmpty() {
+bool OplInstrumentDefinition::isEmpty() const {
 	if (rhythmType != RHYTHM_TYPE_UNDEFINED) {
 		return operator0.isEmpty() &&
 			(rhythmType != RHYTHM_TYPE_BASS_DRUM || operator1.isEmpty());
@@ -40,7 +40,7 @@ bool OplInstrumentDefinition::isEmpty() {
 	}
 }
 
-uint8 OplInstrumentDefinition::getNumberOfOperators() {
+uint8 OplInstrumentDefinition::getNumberOfOperators() const {
 	if (rhythmType == RHYTHM_TYPE_UNDEFINED) {
 		return fourOperator ? 4 : 2;
 	} else {
@@ -50,7 +50,7 @@ uint8 OplInstrumentDefinition::getNumberOfOperators() {
 	}
 }
 
-OplInstrumentOperatorDefinition &OplInstrumentDefinition::getOperatorDefinition(uint8 operatorNum) {
+const OplInstrumentOperatorDefinition &OplInstrumentDefinition::getOperatorDefinition(uint8 operatorNum) const {
 	assert((!fourOperator && operatorNum < 2) || operatorNum < 4);
 
 	switch (operatorNum) {
@@ -68,7 +68,7 @@ OplInstrumentOperatorDefinition &OplInstrumentDefinition::getOperatorDefinition(
 	}
 }
 
-void AdLibBnkInstrumentOperatorDefinition::toOplInstrumentOperatorDefinition(OplInstrumentOperatorDefinition &operatorDef, uint8 waveformSelect) {
+void AdLibBnkInstrumentOperatorDefinition::toOplInstrumentOperatorDefinition(OplInstrumentOperatorDefinition &operatorDef, uint8 waveformSelect) const {
 	// Combine the separate fields of the BNK format into complete register values.
 	operatorDef.freqMultMisc = frequencyMultiplier | (keyScalingRate == 0 ? 0 : 0x10) |
 		(envelopeGainType == 0 ? 0 : 0x20) | (vibrato == 0 ? 0 : 0x40) | (amplitudeModulation == 0 ? 0 : 0x80);
@@ -78,7 +78,7 @@ void AdLibBnkInstrumentOperatorDefinition::toOplInstrumentOperatorDefinition(Opl
 	operatorDef.waveformSelect = waveformSelect;
 }
 
-void AdLibBnkInstrumentDefinition::toOplInstrumentDefinition(OplInstrumentDefinition &instrumentDef) {
+void AdLibBnkInstrumentDefinition::toOplInstrumentDefinition(OplInstrumentDefinition &instrumentDef) const {
 	instrumentDef.fourOperator = false;
 
 	operator0.toOplInstrumentOperatorDefinition(instrumentDef.operator0, waveformSelect0);
@@ -93,8 +93,52 @@ void AdLibBnkInstrumentDefinition::toOplInstrumentDefinition(OplInstrumentDefini
 	instrumentDef.rhythmType = RHYTHM_TYPE_UNDEFINED;
 }
 
+void AdLibIbkInstrumentDefinition::toOplInstrumentDefinition(OplInstrumentDefinition &instrumentDef) const {
+	instrumentDef.fourOperator = false;
+
+	instrumentDef.operator0.freqMultMisc = o0FreqMultMisc;
+	instrumentDef.operator0.level = o0Level;
+	instrumentDef.operator0.decayAttack = o0DecayAttack;
+	instrumentDef.operator0.releaseSustain = o0ReleaseSustain;
+	instrumentDef.operator0.waveformSelect = o0WaveformSelect;
+
+	instrumentDef.operator1.freqMultMisc = o1FreqMultMisc;
+	instrumentDef.operator1.level = o1Level;
+	instrumentDef.operator1.decayAttack = o1DecayAttack;
+	instrumentDef.operator1.releaseSustain = o1ReleaseSustain;
+	instrumentDef.operator1.waveformSelect = o1WaveformSelect;
+
+	instrumentDef.connectionFeedback0 = connectionFeedback;
+
+	instrumentDef.rhythmNote = rhythmNote;
+	OplInstrumentRhythmType convRhythmType;
+	switch (rhythmType) {
+		case 6:
+			convRhythmType = RHYTHM_TYPE_BASS_DRUM;
+			break;
+		case 7:
+			convRhythmType = RHYTHM_TYPE_SNARE_DRUM;
+			break;
+		case 8:
+			convRhythmType = RHYTHM_TYPE_TOM_TOM;
+			break;
+		case 9:
+			convRhythmType = RHYTHM_TYPE_CYMBAL;
+			break;
+		case 10:
+			convRhythmType = RHYTHM_TYPE_HI_HAT;
+			break;
+		case 0:
+		default:
+			convRhythmType = RHYTHM_TYPE_UNDEFINED;
+			break;
+	}
+	instrumentDef.rhythmType = convRhythmType;
+	// TODO Add support for transpose
+}
+
 // These are the melodic instrument definitions used by the Win95 SB16 driver.
-OplInstrumentDefinition MidiDriver_ADLIB_Multisource::OPL_INSTRUMENT_BANK[128] = {
+const OplInstrumentDefinition MidiDriver_ADLIB_Multisource::OPL_INSTRUMENT_BANK[128] = {
 	// 0x00
 	{ false, { 0x01, 0x8F, 0xF2, 0xF4, 0x00 }, { 0x01, 0x06, 0xF2, 0xF7, 0x00 }, { 0x00, 0x00, 0x00, 0x00, 0x00 }, { 0x00, 0x00, 0x00, 0x00, 0x00 }, 0x38, 0x00, 0x00, RHYTHM_TYPE_UNDEFINED },
 	{ false, { 0x01, 0x4B, 0xF2, 0xF4, 0x00 }, { 0x01, 0x00, 0xF2, 0xF7, 0x00 }, { 0x00, 0x00, 0x00, 0x00, 0x00 }, { 0x00, 0x00, 0x00, 0x00, 0x00 }, 0x38, 0x00, 0x00, RHYTHM_TYPE_UNDEFINED },
@@ -242,7 +286,7 @@ OplInstrumentDefinition MidiDriver_ADLIB_Multisource::OPL_INSTRUMENT_BANK[128] =
 };
 
 // These are the rhythm instrument definitions used by the Win95 SB16 driver.
-OplInstrumentDefinition MidiDriver_ADLIB_Multisource::OPL_RHYTHM_BANK[62] = {
+const OplInstrumentDefinition MidiDriver_ADLIB_Multisource::OPL_RHYTHM_BANK[62] = {
 	// GS percussion start
 	// 0x1B
 	{ false, { 0x00, 0x00, 0x00, 0x00, 0x00 }, { 0x00, 0x00, 0x00, 0x00, 0x00 }, { 0x00, 0x00, 0x00, 0x00, 0x00 }, { 0x00, 0x00, 0x00, 0x00, 0x00 }, 0x00, 0x00, 0x00, RHYTHM_TYPE_UNDEFINED },
@@ -385,6 +429,7 @@ void MidiDriver_ADLIB_Multisource::ActiveNote::init() {
 	noteCounterValue = 0;
 
 	instrumentId = 0;
+	lastWrittenInstrumentId = -1;
 	instrumentDef = nullptr;
 
 	channelAllocated = false;
@@ -402,6 +447,7 @@ MidiDriver_ADLIB_Multisource::MidiDriver_ADLIB_Multisource(OPL::Config::OplType 
 		_allocationMode(ALLOCATION_MODE_DYNAMIC),
 		_instrumentWriteMode(INSTRUMENT_WRITE_MODE_NOTE_ON),
 		_rhythmModeIgnoreNoteOffs(false),
+		_channel10Melodic(false),
 		_defaultChannelVolume(0),
 		_noteSelect(NOTE_SELECT_MODE_0),
 		_modulationDepth(MODULATION_DEPTH_HIGH),
@@ -694,6 +740,19 @@ void MidiDriver_ADLIB_Multisource::noteOn(uint8 channel, uint8 note, uint8 veloc
 		if (_instrumentWriteMode == INSTRUMENT_WRITE_MODE_NOTE_ON) {
 			// Write out the instrument definition, volume and panning.
 			writeInstrument(oplChannel, instrument);
+		}
+		else if (_instrumentWriteMode == INSTRUMENT_WRITE_MODE_FIRST_NOTE_ON) {
+			if (activeNote->lastWrittenInstrumentId != activeNote->instrumentId) {
+				// Write out the instrument definition, volume and panning.
+				writeInstrument(oplChannel, instrument);
+			}
+			else {
+				// Write out volume, if applicable.
+				for (int i = 0; i < activeNote->instrumentDef->getNumberOfOperators(); i++) {
+					if (isVolumeApplicableToOperator(*activeNote->instrumentDef, i))
+						writeVolume(oplChannel, i);
+				}
+			}
 		}
 
 		// Calculate and write frequency and block and write key on bit.
@@ -1317,7 +1376,7 @@ void MidiDriver_ADLIB_Multisource::recalculateVolumes(uint8 channel, uint8 sourc
 MidiDriver_ADLIB_Multisource::InstrumentInfo MidiDriver_ADLIB_Multisource::determineInstrument(uint8 channel, uint8 source, uint8 note) {
 	InstrumentInfo instrument = { 0, nullptr, 0 };
 
-	if (channel == MIDI_RHYTHM_CHANNEL) {
+	if (!_channel10Melodic && channel == MIDI_RHYTHM_CHANNEL) {
 		// On the rhythm channel, the note played indicates which instrument
 		// should be used.
 		if (note < _rhythmBankFirstNote || note > _rhythmBankLastNote)
@@ -1575,10 +1634,77 @@ int32 MidiDriver_ADLIB_Multisource::calculatePitchBend(uint8 channel, uint8 sour
 	return pitchBend;
 }
 
-uint8 MidiDriver_ADLIB_Multisource::calculateVolume(uint8 channel, uint8 source, uint8 velocity, OplInstrumentDefinition &instrumentDef, uint8 operatorNum) {
+uint8 MidiDriver_ADLIB_Multisource::calculateVolume(uint8 channel, uint8 source, uint8 velocity, const OplInstrumentDefinition &instrumentDef, uint8 operatorNum) {
 	// Get the volume (level) for this operator from the instrument definition.
 	uint8 operatorDefVolume = instrumentDef.getOperatorDefinition(operatorNum).level & 0x3F;
 
+	// Determine if volume settings should be applied to this operator.
+	if (!isVolumeApplicableToOperator(instrumentDef, operatorNum))
+		// No need to apply volume settings; just use the instrument definition
+		// operator volume.
+		return operatorDefVolume;
+
+	// Calculate the volume based on note velocity, channel volume and
+	// expression.
+	uint8 unscaledVolume = calculateUnscaledVolume(channel, source, velocity, instrumentDef, operatorNum);
+
+	uint8 invertedVolume = 0x3F - unscaledVolume;
+	// Scale by source volume.
+	invertedVolume = (invertedVolume * _sources[source].volume) / _sources[source].neutralVolume;
+	if (_userVolumeScaling) {
+		if (_userMute) {
+			invertedVolume = 0;
+		} else {
+			// Scale by user volume.
+			uint16 userVolume = (_sources[source].type == SOURCE_TYPE_SFX ? _userSfxVolume : _userMusicVolume); // Treat SOURCE_TYPE_UNDEFINED as music
+			invertedVolume = (invertedVolume * userVolume) >> 8;
+		}
+	}
+	// Source volume scaling might clip volume, so reduce to maximum.
+	invertedVolume = MIN((uint8)0x3F, invertedVolume);
+	uint8 scaledVolume = 0x3F - invertedVolume;
+
+	return scaledVolume;
+}
+
+uint8 MidiDriver_ADLIB_Multisource::calculateUnscaledVolume(uint8 channel, uint8 source, uint8 velocity, const OplInstrumentDefinition &instrumentDef, uint8 operatorNum) {
+	uint8 unscaledVolume;
+	// Get the volume (level) for this operator from the instrument definition.
+	uint8 operatorVolume = instrumentDef.getOperatorDefinition(operatorNum).level & 0x3F;
+
+	if (_accuracyMode == ACCURACY_MODE_SB16_WIN95) {
+		// Volume calculation using the algorithm of the Win95 SB16 driver.
+
+		// Shift velocity and channel volume to a 5 bit value and look up the OPL
+		// volume value.
+		uint8 velocityVolume = OPL_VOLUME_LOOKUP[velocity >> 2];
+		uint8 channelVolume = OPL_VOLUME_LOOKUP[_controlData[source][channel].volume >> 2];
+		// Add velocity and channel OPL volume to get the unscaled volume. The
+		// operator volume is an additional (negative) volume adjustment to balance
+		// the instruments.
+		// Note that large OPL volume values can exceed the 0x3F limit; this is
+		// handled below. (0x3F means maximum attenuation - no sound.)
+		unscaledVolume = velocityVolume + channelVolume + operatorVolume;
+	} else {
+		// Volume calculation using an algorithm more accurate to the General MIDI
+		// standard.
+
+		// Calculate the volume in dB according to the GM formula:
+		// 40 log(velocity * volume * expression / 127 ^ 3)
+		// Note that velocity is not specified in detail in the MIDI standards;
+		// we use the same volume curve as channel volume and expression.
+		float volumeDb = 40 * log10((velocity * _controlData[source][channel].volume * _controlData[source][channel].expression) / 2048383.0f);
+		// Convert to OPL volume (every unit is 0.75 dB attenuation). The
+		// operator volume is an additional (negative) volume adjustment to balance
+		// the instruments.
+		unscaledVolume = volumeDb / -0.75f + operatorVolume;
+	}
+
+	// Clip the volume to the maximum value.
+	return MIN((uint8)0x3F, unscaledVolume);
+}
+
+bool MidiDriver_ADLIB_Multisource::isVolumeApplicableToOperator(const OplInstrumentDefinition &instrumentDef, uint8 operatorNum) {
 	// Determine if volume settings should be applied to this operator. Carrier
 	// operators in FM synthesis and all operators in additive synthesis need
 	// to have volume settings applied; modulator operators just use the
@@ -1623,69 +1749,7 @@ uint8 MidiDriver_ADLIB_Multisource::calculateVolume(uint8 channel, uint8 source,
 		// carrier.
 		applyVolume = (instrumentDef.connectionFeedback0 & 0x01) == 0x01 || operatorNum == 1;
 	}
-	if (!applyVolume)
-		// No need to apply volume settings; just use the instrument definition
-		// operator volume.
-		return operatorDefVolume;
-
-	// Calculate the volume based on note velocity, channel volume and
-	// expression.
-	uint8 unscaledVolume = calculateUnscaledVolume(channel, source, velocity, instrumentDef, operatorNum);
-
-	uint8 invertedVolume = 0x3F - unscaledVolume;
-	// Scale by source volume.
-	invertedVolume = (invertedVolume * _sources[source].volume) / _sources[source].neutralVolume;
-	if (_userVolumeScaling) {
-		if (_userMute) {
-			invertedVolume = 0;
-		} else {
-			// Scale by user volume.
-			uint16 userVolume = (_sources[source].type == SOURCE_TYPE_SFX ? _userSfxVolume : _userMusicVolume); // Treat SOURCE_TYPE_UNDEFINED as music
-			invertedVolume = (invertedVolume * userVolume) >> 8;
-		}
-	}
-	// Source volume scaling might clip volume, so reduce to maximum.
-	invertedVolume = MIN((uint8)0x3F, invertedVolume);
-	uint8 scaledVolume = 0x3F - invertedVolume;
-
-	return scaledVolume;
-}
-
-uint8 MidiDriver_ADLIB_Multisource::calculateUnscaledVolume(uint8 channel, uint8 source, uint8 velocity, OplInstrumentDefinition &instrumentDef, uint8 operatorNum) {
-	uint8 unscaledVolume;
-	// Get the volume (level) for this operator from the instrument definition.
-	uint8 operatorVolume = instrumentDef.getOperatorDefinition(operatorNum).level & 0x3F;
-
-	if (_accuracyMode == ACCURACY_MODE_SB16_WIN95) {
-		// Volume calculation using the algorithm of the Win95 SB16 driver.
-
-		// Shift velocity and channel volume to a 5 bit value and look up the OPL
-		// volume value.
-		uint8 velocityVolume = OPL_VOLUME_LOOKUP[velocity >> 2];
-		uint8 channelVolume = OPL_VOLUME_LOOKUP[_controlData[source][channel].volume >> 2];
-		// Add velocity and channel OPL volume to get the unscaled volume. The
-		// operator volume is an additional (negative) volume adjustment to balance
-		// the instruments.
-		// Note that large OPL volume values can exceed the 0x3F limit; this is
-		// handled below. (0x3F means maximum attenuation - no sound.)
-		unscaledVolume = velocityVolume + channelVolume + operatorVolume;
-	} else {
-		// Volume calculation using an algorithm more accurate to the General MIDI
-		// standard.
-
-		// Calculate the volume in dB according to the GM formula:
-		// 40 log(velocity * volume * expression / 127 ^ 3)
-		// Note that velocity is not specified in detail in the MIDI standards;
-		// we use the same volume curve as channel volume and expression.
-		float volumeDb = 40 * log10((velocity * _controlData[source][channel].volume * _controlData[source][channel].expression) / 2048383.0f);
-		// Convert to OPL volume (every unit is 0.75 dB attenuation). The
-		// operator volume is an additional (negative) volume adjustment to balance
-		// the instruments.
-		unscaledVolume = volumeDb / -0.75f + operatorVolume;
-	}
-
-	// Clip the volume to the maximum value.
-	return MIN((uint8)0x3F, unscaledVolume);
+	return applyVolume;
 }
 
 uint8 MidiDriver_ADLIB_Multisource::calculatePanning(uint8 channel, uint8 source) {
@@ -1794,6 +1858,7 @@ uint16 MidiDriver_ADLIB_Multisource::determineChannelRegisterOffset(uint8 oplCha
 void MidiDriver_ADLIB_Multisource::writeInstrument(uint8 oplChannel, InstrumentInfo instrument) {
 	ActiveNote *activeNote = (instrument.instrumentDef->rhythmType == RHYTHM_TYPE_UNDEFINED ? &_activeNotes[oplChannel] : &_activeRhythmNotes[instrument.instrumentDef->rhythmType - 1]);
 	activeNote->instrumentDef = instrument.instrumentDef;
+	activeNote->lastWrittenInstrumentId = instrument.instrumentId;
 
 	// Calculate operator volumes and write operator definitions to
 	// the OPL registers.

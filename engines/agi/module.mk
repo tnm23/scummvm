@@ -11,7 +11,10 @@ MODULE_OBJS := \
 	graphics.o \
 	inv.o \
 	keyboard.o \
+	loader.o \
 	loader_a2.o \
+	loader_gal.o \
+	loader_gal_a2.o \
 	loader_v1.o \
 	loader_v2.o \
 	loader_v3.o \
@@ -26,6 +29,7 @@ MODULE_OBJS := \
 	op_dbg.o \
 	op_test.o \
 	picture.o \
+	picture_gal.o \
 	saveload.o \
 	sound.o \
 	sound_2gs.o \
@@ -41,6 +45,8 @@ MODULE_OBJS := \
 	words.o \
 	preagi/preagi.o \
 	preagi/mickey.o \
+	preagi/picture_mickey_winnie.o \
+	preagi/picture_troll.o \
 	preagi/troll.o \
 	preagi/winnie.o
 

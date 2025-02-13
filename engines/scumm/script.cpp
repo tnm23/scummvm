@@ -59,7 +59,7 @@ void ScummEngine::runScript(int script, bool freezeResistant, bool recursive, in
 		putOwner(56, VAR(VAR_EGO));
 	}
 
- 	if (!script)
+	if (!script)
 		return;
 
 	if (!recursive)
@@ -182,6 +182,10 @@ int ScummEngine::getVerbEntrypoint(int obj, int entry) {
 	// release completely disables pulling the rope, instead. We
 	// choose to follow the latter, as it's simpler, and the former
 	// made Guybrush silent when trying to trigger this action.
+	//
+	// (The Special Edition is based on the original release with
+	// the buggy script, but it doesn't cause any fatal error,
+	// although it does glitch, when playing in Classic Mode.)
 	if (_game.id == GID_MONKEY2 && obj == 1047 && entry == 6 && whereIsObject(obj) == WIO_INVENTORY &&
 		enhancementEnabled(kEnhGameBreakingBugFixes)) {
 		return 0;
@@ -587,6 +591,13 @@ int ScummEngine::readVar(uint var) {
 		}
 		if (VAR_NOSUBTITLES != 0xFF && var == VAR_NOSUBTITLES) {
 			return !ConfMan.getBool("subtitles");
+		}
+
+		// WORKAROUND: The Macintosh version version of MI2 first sets the
+		// machine speed to 2, then immediately to 1, in script 1. This affects
+		// at the very least the number of bats in the Scabb Island swamp.
+		if (_game.id == GID_MONKEY2 && _game.platform == Common::kPlatformMacintosh && var == VAR_MACHINE_SPEED && enhancementEnabled(kEnhRestoredContent)) {
+			return 2;
 		}
 
 #if defined(USE_ENET) && defined(USE_LIBCURL)
@@ -1037,6 +1048,16 @@ void ScummEngine::runEntryScript() {
 	}
 	if (VAR_ENTRY_SCRIPT2 != 0xFF && VAR(VAR_ENTRY_SCRIPT2))
 		runScript(VAR(VAR_ENTRY_SCRIPT2), 0, 0, nullptr);
+
+	// WORKAROUND: The Macintosh version of MI2 doesn't have any bats in the
+	// Scabb Island swamp, because that line has been removed from the entry
+	// script for room 20. We re-insert that call here.
+	if (_game.id == GID_MONKEY2 && _game.platform == Common::kPlatformMacintosh &&
+		_currentRoom == 20 && enhancementEnabled(kEnhRestoredContent)) {
+		int args[NUM_SCRIPT_LOCAL];
+		memset(args, 0, sizeof(args));
+		runScript(215, false, false, args);
+	}
 }
 
 void ScummEngine::runQuitScript() {

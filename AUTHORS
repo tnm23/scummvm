@@ -151,7 +151,7 @@ ScummVM Team
     Composer:
        Alyssa Milburn
 
-    Crab:
+    CRAB:
        Kartik Agarwala
 
     CruisE:
@@ -166,6 +166,14 @@ ScummVM Team
 
     Cryomni3D:
        Philippe Valembois
+
+    Darkseed:
+       Eric Fry
+
+    DGDS:
+       Matthew Duggan
+       Filippos Karapetis
+       Vasco Alexandre da Silva Costa
 
     Director:
        Eugene Sandulenko
@@ -230,6 +238,10 @@ ScummVM Team
        Simon Delamarre
        Sven Hesse
        Eugene Sandulenko
+
+    Got:
+       Paul Gilbert
+       Arnaud Boutonne
 
     Griffon:
        Eugene Sandulenko
@@ -316,6 +328,7 @@ ScummVM Team
 
     M4:
        Paul Gilbert
+       Arnaud Boutonne
 
     MacVenture:
        Borja Lorente                  - GSoC student
@@ -328,6 +341,9 @@ ScummVM Team
        Arnaud Boutonne
        Paul Gilbert
        Filippos Karapetis
+
+    Media Station:
+       Nathanael Gentry
 
     MM (Xeen):
        Paul Gilbert
@@ -394,6 +410,10 @@ ScummVM Team
 
     Private:
        Gustavo Grieco
+
+    QDEngine:
+       Eugene Sandulenko
+       Kunal Tiwari
 
     Queen:
        David Eriksson                 - (retired)
@@ -594,8 +614,10 @@ ScummVM Team
 
     Wintermute:
        Gunnar Birke                   - Wintermute 3D
+       Pawel Kolodziejski             - Wintermute 3D
        Einar Johan T. Somaaen
        Tobia Tesan
+       lolbot-iichan
 
     Z-Vision:
        Adrian Astley

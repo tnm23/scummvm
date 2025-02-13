@@ -20,6 +20,7 @@
  */
 
 #include "common/system.h"
+#include "common/debug.h"
 #include "graphics/paletteman.h"
 
 #include "dgds/game_palettes.h"
@@ -27,6 +28,15 @@
 #include "dgds/resource.h"
 
 namespace Dgds {
+
+static const byte EGA_COLORS[16][3] = {
+	{ 0x00, 0x00, 0x00 }, { 0x00, 0x00, 0xAA }, { 0x00, 0xAA, 0x00 },
+	{ 0x00, 0xAA, 0xAA }, { 0xAA, 0x00, 0x00 }, { 0xAA, 0x00, 0xAA },
+	{ 0xAA, 0x55, 0x00 }, { 0xAA, 0xAA, 0xAA }, { 0x55, 0x55, 0x55 },
+	{ 0x55, 0x55, 0xFF }, { 0x55, 0xFF, 0x55 }, { 0x55, 0xFF, 0xFF },
+	{ 0xFF, 0x55, 0x55 }, { 0xFF, 0x55, 0xFF }, { 0xFF, 0xFF, 0x55 },
+	{ 0xFF, 0xFF, 0xFF },
+};
 
 DgdsPal::DgdsPal() : Palette(256) {
 }
@@ -43,9 +53,9 @@ void GamePalettes::reset() {
 int GamePalettes::loadPalette(const Common::String &filename) {
 	Common::SeekableReadStream *fileStream = _resourceMan->getResource(filename);
 	if (!fileStream) {
-		// Happens in the Amiga version of Dragon
+		// Happens in the Amiga version of Dragon and CDS scripts
 		warning("Couldn't load palette resource %s", filename.c_str());
-		return 0;
+		return _curPalNum;
 	}
 
 	_palettes.resize(_palettes.size() + 1);
@@ -56,13 +66,47 @@ int GamePalettes::loadPalette(const Common::String &filename) {
 	while (chunk.readNextHeader(EX_PAL, filename)) {
 		chunk.readContent(_decompressor);
 		Common::SeekableReadStream *chunkStream = chunk.getContent();
-		if (chunk.isSection(ID_VGA)) {
+		if (chunk.isSection(ID_PAL)) {
+			assert(chunk.isContainer());
+		} else if (chunk.isSection(ID_VGA)) {
+			if (chunk.getSize() != 768)
+				error("VGA palette in %s should be 768 bytes long, got %d", filename.c_str(), chunk.getSize());
 			for (uint k = 0; k < 256; k++) {
 				byte r = chunkStream->readByte() << 2;
 				byte g = chunkStream->readByte() << 2;
 				byte b = chunkStream->readByte() << 2;
 				pal.set(k, r, g, b);
 			}
+			break;
+		} else if (chunk.isSection(ID_EGA)) {
+			if (chunk.getSize() > 20) {
+				// Dragon style EGA palette
+				for (uint k = 0; k < chunk.getSize() / 2; k++) {
+					byte egaCol = (chunkStream->readUint16LE() & 0xF);
+					byte r = EGA_COLORS[egaCol][0];
+					byte g = EGA_COLORS[egaCol][1];
+					byte b = EGA_COLORS[egaCol][2];
+					pal.set(k, r, g, b);
+				}
+			} else {
+				// HoC style EGA palette
+				for (uint k = 0; k < MIN(chunk.getSize(), (uint32)16); k++) {
+					byte egaCol = (chunkStream->readByte());
+					// For some reason bit 5 means bit 4 as
+					// offset into the palette
+					if (egaCol & 0x10)
+						egaCol -= 8;
+					byte r = EGA_COLORS[egaCol % 16][0];
+					byte g = EGA_COLORS[egaCol % 16][1];
+					byte b = EGA_COLORS[egaCol % 16][2];
+					pal.set(k, r, g, b);
+				}
+			}
+			break;
+		} else if (chunk.isSection(ID_CGA)) {
+			debug(1, "Skipping CGA palette data");
+		} else {
+			error("Unknown Palette chunk in %s: %s size %d", filename.c_str(), chunk.getIdStr(), chunk.getSize());
 		}
 	}
 	pal.setName(filename);

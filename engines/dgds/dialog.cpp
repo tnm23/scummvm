@@ -27,7 +27,6 @@
 #include "common/system.h"
 
 #include "graphics/surface.h"
-#include "graphics/primitives.h"
 
 #include "dgds/dgds.h"
 #include "dgds/includes.h"
@@ -36,22 +35,9 @@
 #include "dgds/scene.h"
 #include "dgds/font.h"
 #include "dgds/drawing.h"
+#include "dgds/debug_util.h"
 
 namespace Dgds {
-
-// TODO: This is repeated here and in scene.cpp
-template<class S> static Common::String _dumpStructList(const Common::String &indent, const Common::String &name, const Common::Array<S> &list) {
-	if (list.empty())
-		return "";
-
-	const Common::String nextind = indent + "    ";
-	Common::String str = Common::String::format("\n%s%s=", Common::String(indent + "  ").c_str(), name.c_str());
-	for (const auto &s : list) {
-		str += "\n";
-		str += s.dump(nextind);
-	}
-	return str;
-}
 
 
 int Dialog::_lastSelectedDialogItemNum = 0;
@@ -60,7 +46,7 @@ Dialog *Dialog::_lastDialogSelectionChangedFor = nullptr;
 
 Dialog::Dialog() : _num(0), _bgColor(0), _fontColor(0), _selectionBgCol(0), _selectonFontCol(0),
 	_fontSize(0), _flags(kDlgFlagNone), _frameType(kDlgFramePlain), _time(0), _nextDialogDlgNum(0),
-	_nextDialogFileNum(0), _fileNum(0), _unk1(0), _unk2(0)
+	_nextDialogFileNum(0), _fileNum(0), _talkDataNum(0), _talkDataHeadNum(0)
 {}
 
 
@@ -86,7 +72,7 @@ const DgdsFont *Dialog::getDlgTextFont() const {
 	else if (_fontSize == 3)
 		fontType = FontManager::k4x5Font;
 	else if (_fontSize == 4 && DgdsEngine::getInstance()->getGameId() == GID_WILLY)
-		fontType = FontManager::kGameFont;
+		fontType = FontManager::kGameDlgFont;
 	else if (_fontSize == 5 && DgdsEngine::getInstance()->getGameId() == GID_HOC)
 		fontType = FontManager::kChinaFont;
 	return fontman->getFont(fontType);
@@ -156,17 +142,20 @@ void Dialog::drawType2BackgroundChina(Graphics::ManagedSurface *dst, const Commo
 }
 
 void Dialog::drawType2BackgroundBeamish(Graphics::ManagedSurface *dst, const Common::String &title) {
-	// TODO: This needs updating.
-	_state->_loc = DgdsRect(_rect.x + 12, _rect.y + 10, _rect.width - 24, _rect.height - 20);
+	byte fillCol = 0;
+	if (DgdsEngine::getInstance()->isAltDlgColors())
+		fillCol = 20;
+
+	_state->_loc = DgdsRect(_rect.x + 11, _rect.y + 10, _rect.width - 22, _rect.height - 20);
 	if (title.empty()) {
-		RequestData::fillBackground(dst, _rect.x, _rect.y, _rect.width, _rect.height, 0);
-		RequestData::drawCorners(dst, 54, _rect.x, _rect.y, _rect.width, _rect.height);
+		dst->fillRect(Common::Rect(Common::Point(_rect.x + 2, _rect.y + 2), _rect.width - 4, _rect.height - 4), fillCol);
+		uint16 cornerOffset = DgdsEngine::getInstance()->isAltDlgColors() ? 46 : 54;
+		RequestData::drawCorners(dst, cornerOffset, _rect.x, _rect.y, _rect.width, _rect.height);
 	} else {
-		dst->fillRect(Common::Rect(Common::Point(_rect.x + 2, _rect.y + 2), _rect.width - 4, _rect.height - 4), 0);
+		dst->fillRect(Common::Rect(Common::Point(_rect.x + 2, _rect.y + 2), _rect.width - 4, _rect.height - 4), fillCol);
 		RequestData::drawCorners(dst, 46, _rect.x, _rect.y, _rect.width, _rect.height);
-		// TODO: Maybe should measure the font?
-		_state->_loc.y += 11;
-		_state->_loc.height -= 11;
+		_state->_loc.y += 15;
+		_state->_loc.height -= 15;
 		RequestData::drawHeader(dst, _rect.x, _rect.y + 5, _rect.width, 2, title, _fontColor, false, 0, 0);
 	}
 }
@@ -178,8 +167,15 @@ void Dialog::drawType2(Graphics::ManagedSurface *dst, DialogDrawStage stage) {
 
 	Common::String title;
 	Common::String txt;
+
+	//
+	// Colon has to be followed by the first CR to be used as a heading
+	//
 	uint32 colonpos = _str.find(':');
-	if (colonpos != Common::String::npos) {
+	uint32 crpos = _str.find('\r');
+	bool haveColon = colonpos != Common::String::npos;
+	bool haveCR = crpos != Common::String::npos;
+	if (haveColon && haveCR && crpos == colonpos + 1) {
 		title = _str.substr(0, colonpos);
 		txt = _str.substr(colonpos + 1);
 		// Most have a CR after the colon? trim it to remove a blank line.
@@ -189,8 +185,12 @@ void Dialog::drawType2(Graphics::ManagedSurface *dst, DialogDrawStage stage) {
 		txt = _str;
 	}
 
-	// Special case for HoC to update the Shekel count in their description.
-	// This is how the original game does it too.
+	//
+	// Special case for HoC to update the Shekel count in their description
+	// and Willy Beamish update dollars
+	//
+	// This is how the original games do it too.
+	//
 	DgdsEngine *engine = DgdsEngine::getInstance();
 	if (_fileNum == 0x5d && _num == 0x32 && engine->getGameId() == GID_HOC) {
 		int16 shekels = engine->getGDSScene()->getGlobal(44);
@@ -198,6 +198,12 @@ void Dialog::drawType2(Graphics::ManagedSurface *dst, DialogDrawStage stage) {
 		uint32 offset = txt.find("###");
 		if (offset != Common::String::npos)
 			txt.replace(offset, 3, numstr);
+	} else if (_fileNum == 67 && _num == 9 && engine->getGameId() == GID_WILLY) {
+		int16 cents = engine->getGDSScene()->getGlobal(3);
+		const Common::String numstr = Common::String::format("%3d.%02d", cents / 100, cents % 100);
+		uint32 offset = txt.find("###.##");
+		if (offset != Common::String::npos)
+			txt.replace(offset, 6, numstr);
 	}
 
 	if (stage == kDlgDrawStageBackground) {
@@ -252,8 +258,8 @@ void Dialog::drawType3(Graphics::ManagedSurface *dst, DialogDrawStage stage) {
 		}
 
 		xradius = (yradius * 5) / 4;
-		const int16 circlesAcross = usablex / xradius - 1;
-		const int16 circlesDown = usabley / yradius - 1;
+		const int16 circlesAcross = MAX(1, usablex / xradius - 1);
+		const int16 circlesDown = MAX(1, usabley / yradius - 1);
 
 		uint16 x = _rect.x + xradius;
 		uint16 y = _rect.y + yradius;
@@ -346,8 +352,8 @@ void Dialog::drawType4(Graphics::ManagedSurface *dst, DialogDrawStage stage) {
 		// This is not exactly the same as the original - might need some work to get pixel-perfect
 		if (DgdsEngine::getInstance()->getGameId() != GID_HOC) {
 			Common::Rect drawRect(x, y, x + w, y + h);
-			Graphics::drawRoundRect(drawRect, midy, fillbgcolor, true, Drawing::drawPixel, dst);
-			Graphics::drawRoundRect(drawRect, midy, fillcolor, false, Drawing::drawPixel, dst);
+			dst->drawRoundRect(drawRect, midy, fillbgcolor, true);
+			dst->drawRoundRect(drawRect, midy, fillcolor, false);
 		}
 	} else if (stage == kDlgDrawFindSelectionPointXY) {
 		drawFindSelectionXY();
@@ -365,6 +371,31 @@ void Dialog::drawType4(Graphics::ManagedSurface *dst, DialogDrawStage stage) {
 	}
 }
 
+int _stringWidthIgnoringTrainingSpace(const DgdsFont *font, const Common::String &line) {
+	if (Common::isSpace(line.lastChar())) {
+		// Find end without trailing spaces
+		int i = line.size() - 2;
+		while (i > 0 && Common::isSpace(line[i]))
+			i--;
+		return font->getStringWidth(line.substr(0, i + 1));
+	} else {
+		return font->getStringWidth(line);
+	}
+}
+
+int _maxWidthIgnoringTrailingSpace(const DgdsFont *font, const Common::Array<Common::String> &lines) {
+	//
+	// The line wrapper returns width including trailing spaces, but for accurate
+	// layout we need to ignore spaces in the string width.
+	//
+	int maxWidth = 0;
+	for (const auto &line : lines) {
+		maxWidth = MAX(_stringWidthIgnoringTrainingSpace(font, line), maxWidth);
+	}
+	return maxWidth;
+}
+
+
 void Dialog::drawFindSelectionXY() {
 	if (!_state)
 		return;
@@ -381,8 +412,9 @@ void Dialog::drawFindSelectionXY() {
 	_state->_charHeight = font->getFontHeight();
 	if (_state->_strMouseLoc) {
 		Common::Array<Common::String> lines;
-		int maxWidth = font->wordWrapText(_str, _state->_loc.width, lines);
+		font->wordWrapText(_str, _state->_loc.width, lines, 0, Graphics::kWordWrapOnExplicitNewLines | Graphics::kWordWrapAllowTrailingWhitespace);
 		uint nlines = _countPrintedLines(lines);
+		int maxWidth = _maxWidthIgnoringTrailingSpace(font, lines);
 
 		if (hasFlag(kDlgFlagLeftJust)) {
 			x = x + (_state->_loc.width - maxWidth - 1) / 2;
@@ -406,10 +438,10 @@ void Dialog::drawFindSelectionXY() {
 		}
 
 		// now get width of the remaining string to the mouse str offset
-		x += font->getStringWidth(_str.substr(totalchars, _state->_strMouseLoc - totalchars));
+		x += _stringWidthIgnoringTrainingSpace(font, _str.substr(totalchars, _state->_strMouseLoc - totalchars));
 
 		// TODO: does this make sense?
-		if (_state->_loc.x + _state->_loc.width < (x + font->getCharWidth(_state->_strMouseLoc))) {
+		if (_state->_loc.x + _state->_loc.width < (x + font->getCharWidth(_str[_state->_strMouseLoc]))) {
 			if (_str[_state->_strMouseLoc] < '!') {
 				_state->_charHeight = 0;
 				_state->_charWidth = 0;
@@ -423,7 +455,7 @@ void Dialog::drawFindSelectionXY() {
 
 		_state->_lastMouseX = x;
 		_state->_lastMouseY = y;
-		_state->_charWidth = font->getCharWidth(_state->_strMouseLoc);
+		_state->_charWidth = font->getCharWidth(_str[_state->_strMouseLoc]);
 	}
 }
 
@@ -463,8 +495,9 @@ void Dialog::drawFindSelectionTxtOffset() {
 	int dlgy = _state->_loc.y;
 
 	Common::Array<Common::String> lines;
-	int maxWidth = font->wordWrapText(_str, _state->_loc.width, lines);
+	font->wordWrapText(_str, _state->_loc.width, lines, 0, Graphics::kWordWrapOnExplicitNewLines | Graphics::kWordWrapAllowTrailingWhitespace);
 	uint numPrintedLines = _countPrintedLines(lines);
+	int maxWidth = _maxWidthIgnoringTrailingSpace(font, lines);
 
 	if (hasFlag(kDlgFlagLeftJust)) {
 		int textHeight = numPrintedLines * lineHeight;
@@ -509,7 +542,7 @@ void Dialog::drawForeground(Graphics::ManagedSurface *dst, uint16 fontcol, const
 	Common::StringArray lines;
 	const DgdsFont *font = getDlgTextFont();
 	const int h = font->getFontHeight();
-	font->wordWrapText(txt, _state->_loc.width, lines);
+	font->wordWrapText(txt, _state->_loc.width, lines, 0, Graphics::kWordWrapOnExplicitNewLines | Graphics::kWordWrapAllowTrailingWhitespace);
 	uint numPrintedLines = _countPrintedLines(lines);
 
 	int ystart = _state->_loc.y + (_state->_loc.height - (int)numPrintedLines * h) / 2;
@@ -533,7 +566,7 @@ void Dialog::drawForeground(Graphics::ManagedSurface *dst, uint16 fontcol, const
 		int maxlen = 0;
 		// each line left-aligned, but overall block is still centered
 		for (const auto &line : lines)
-			maxlen = MAX(maxlen, font->getStringWidth(line));
+			maxlen = MAX(maxlen, _stringWidthIgnoringTrainingSpace(font, line));
 		x += (_state->_loc.width - maxlen) / 2;
 		align = Graphics::kTextAlignLeft;
 		xwidth = maxlen;
@@ -543,14 +576,18 @@ void Dialog::drawForeground(Graphics::ManagedSurface *dst, uint16 fontcol, const
 	}
 
 	for (uint i = 0; i < lines.size(); i++) {
+		// Draw every line unhighlighted then highlight bits as needed
 		font->drawString(dst, lines[i], x, ystart + i * h, xwidth, fontcol, align);
 		if (highlightStart < lineOffs[i + 1] && highlightEnd > lineOffs[i]) {
-			// highlight on this line
-			// TODO: What if it's only a partial line??
-			font->drawString(dst, lines[i], x, ystart + i * h, xwidth, _selectonFontCol, align);
+			// Highlight on this line. Redraw whatever part is highlighted.
+			int lineLen = (int)lines[i].size();
+			int lineHighlightStart = MAX(highlightStart - lineOffs[i], 0);
+			int lineHighlightEnd = MIN(highlightEnd - lineOffs[i], lineLen);
+			int highlightXOff = lineHighlightStart ? font->getStringWidth(lines[i].substr(0, lineHighlightStart)) : 0;
+			Common::String highlightString = lines[i].substr(lineHighlightStart, lineHighlightEnd - lineHighlightStart);
+			font->drawString(dst, highlightString, x + highlightXOff, ystart + i * h, xwidth, _selectonFontCol, align);
 		}
 	}
-
 }
 
 void Dialog::setFlag(DialogFlags flg) {
@@ -614,7 +651,7 @@ void Dialog::updateSelectedAction(int delta) {
 	}
 
 	if (_action.size() > 1 || !delta) {
-		debug("Dialog: update mouse to %d, %d (mouseloc %d, selnum %d)", mouseX, mouseY, _state->_strMouseLoc, _lastSelectedDialogItemNum);
+		debug(1, "Dialog %d: update mouse to %d, %d (mouseloc %d, selnum %d)", _num, mouseX, mouseY, _state->_strMouseLoc, _lastSelectedDialogItemNum);
 		g_system->warpMouse(mouseX, mouseY);
 	}
 }
@@ -659,43 +696,16 @@ struct DialogAction *Dialog::pickAction(bool isClosing, bool isForceClose) {
 	return nullptr;
 }
 
-
-void Dialog::fixupStringAndActions() {
-	//
-	// This is a slight HACK.  The original seems to have accepted any number
-	// of trailing spaces before a CR when doing wrapping, but our wrapper
-	// will wrap the spaces.  This creates too many blank lines.
-	// To correct this, remove sequences of blank before CRs -
-	// but we then have to fix up offsets of actions.
-	//
-	// This code is not efficient, but it only runs once on load and
-	// only on fairly short strings, so it's ok.
-	//
-	for (uint i = 0; i < _str.size(); i++) {
-		if (_str[i] == '\r') {
-			while (i > 0 && _str[i - 1] == ' ') {
-				_str.deleteChar(i - 1);
-				for (auto &action : _action) {
-					if (action.strStart >= i)
-						action.strStart--;
-					if (action.strEnd >= i)
-						action.strEnd--;
-				}
-				i--;
-			}
-		}
-	}
-}
-
-
 Common::String Dialog::dump(const Common::String &indent) const {
 	Common::String str = Common::String::format(
-			"%sDialog<num %d %s bgcol %d fcol %d selbgcol %d selfontcol %d fntsz %d flags 0x%02x frame %d delay %d next %d:%d",
+			"%sDialog<num %d %s bgcol %d fcol %d selbgcol %d selfontcol %d fntsz %d flags 0x%02x frame %d delay %d next %d:%d talkdata %d:%d",
 			indent.c_str(), _num, _rect.dump("").c_str(), _bgColor, _fontColor, _selectionBgCol, _selectonFontCol, _fontSize,
-			_flags, _frameType, _time, _nextDialogFileNum, _nextDialogDlgNum);
-	str += indent + "state=" + (_state ? _state->dump("") : "null");
-	str += "\n";
-	str += _dumpStructList(indent, "actions", _action);
+			_flags, _frameType, _time, _nextDialogFileNum, _nextDialogDlgNum, _talkDataNum, _talkDataHeadNum);
+	str += indent + " state=" + (_state ? _state->dump("") : "null");
+	if (_action.size()) {
+		str += "\n";
+		str += DebugUtil::dumpStructList(indent, "actions", _action);
+	}
 	str += "\n";
 	str += indent + "  str='" + _str + "'>";
 	return str;
@@ -740,7 +750,7 @@ Common::Error DialogState::syncState(Common::Serializer &s) {
 
 Common::String DialogAction::dump(const Common::String &indent) const {
 	Common::String str = Common::String::format("%sDialogueAction<span: %d-%d", indent.c_str(), strStart, strEnd);
-	str += _dumpStructList(indent, "opList", sceneOpList);
+	str += DebugUtil::dumpStructList(indent, "opList", sceneOpList);
 	if (!sceneOpList.empty()) {
 		str += "\n";
 		str += indent;

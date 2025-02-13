@@ -58,6 +58,7 @@
  * - Adiboud'chou sur la banquise
  * - Adiboud'chou a la campagne
  * - Adiboud'chou dans la jungle et la savane
+ * - English Fever
  * - Gobliiins
  * - Gobliins 2
  * - Goblins 3
@@ -164,6 +165,7 @@ private:
 	GameType _gameType;
 	int32 _features;
 	Common::Platform _platform;
+	const char *_extra;
 
 	EndiannessMethod _endiannessMethod;
 
@@ -258,6 +260,13 @@ public:
 
 	void initGame(const GOBGameDescription *gd);
 	GameType getGameType(const char *gameId) const;
+
+	/**
+	 * Used to obtain the game version as a fallback
+	 * from our detection tables, if the VERSION file
+	 * is missing
+	 */
+	const char *getGameVersion() const;
 };
 
 } // End of namespace Gob

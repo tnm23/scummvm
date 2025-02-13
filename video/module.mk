@@ -6,12 +6,12 @@ MODULE_OBJS := \
 	coktel_decoder.o \
 	dxa_decoder.o \
 	flic_decoder.o \
-	hnm_decoder.o \
 	mpegps_decoder.o \
 	mve_decoder.o \
 	paco_decoder.o \
 	psx_decoder.o \
 	qt_decoder.o \
+	qtvr_decoder.o \
 	smk_decoder.o \
 	subtitles.o \
 	video_decoder.o
@@ -19,6 +19,11 @@ MODULE_OBJS := \
 ifdef USE_BINK
 MODULE_OBJS += \
 	bink_decoder.o
+endif
+
+ifdef USE_HNM
+MODULE_OBJS += \
+	hnm_decoder.o
 endif
 
 ifdef USE_THEORADEC

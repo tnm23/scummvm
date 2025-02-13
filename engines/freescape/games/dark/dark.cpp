@@ -43,6 +43,7 @@ DarkEngine::DarkEngine(OSystem *syst, const ADGameDescription *gd) : FreescapeEn
 	_soundIndexAreaChange = 5;
 	_soundIndexHit = 2;
 	_soundIndexRestoreECD = 19;
+	_soundIndexDestroyECD = -1;
 
 	_soundIndexNoShield = -1;
 	_soundIndexNoEnergy = -1;
@@ -56,6 +57,8 @@ DarkEngine::DarkEngine(OSystem *syst, const ADGameDescription *gd) : FreescapeEn
 		initDOS();
 	else if (isSpectrum())
 		initZX();
+	else if (isC64())
+		initC64();
 	else if (isCPC())
 		initCPC();
 	else if (isAmiga() || isAtariST())
@@ -264,6 +267,8 @@ void DarkEngine::initGameState() {
 	getTimeFromCountdown(seconds, minutes, hours);
 	_lastMinute = minutes;
 	_lastTenSeconds = seconds / 10;
+	// Start playing music, if any, in any supported format
+	playMusic("Dark Side Theme");
 }
 
 void DarkEngine::loadAssets() {
@@ -613,8 +618,6 @@ void DarkEngine::gotoArea(uint16 areaID, int entranceID) {
 	_gameStateVars[0x1f] = 0;
 
 	if (areaID == _startArea && entranceID == _startEntrance) {
-		_yaw = 90;
-		_pitch = 0;
 		playSound(_soundIndexStart, true);
 	} else if (areaID == _endArea && entranceID == _endEntrance) {
 		_pitch = 10;

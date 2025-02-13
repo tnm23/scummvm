@@ -23,6 +23,7 @@
 #include "m4/riddle/rooms/section4/section4.h"
 #include "m4/graphics/gr_series.h"
 #include "m4/riddle/vars.h"
+#include "m4/riddle/riddle.h"
 
 namespace M4 {
 namespace Riddle {
@@ -45,14 +46,14 @@ void Room402::init() {
 		_val1 = 0;
 		_val2 = -1;
 		_val4 = 0;
-		_val5 = -1;
+		_trigger1 = -1;
 		_val6 = 0;
 		_val8 = 0;
 		_currentNode = -1;
 		_val10 = 0;
 		_val11 = 0;
-		_val12 = 0;
-		_val13 = 0;
+		_wolfMode = 0;
+		_wolfShould = 0;
 		_sound1.clear();
 		_sound2.clear();
 	}
@@ -69,13 +70,13 @@ void Room402::init() {
 	digi_preload("950_s21");
 	digi_preload("950_s23");
 
-	if (!_G(flags)[GLB_TEMP_12] && !_G(flags)[V117]) {
+	if (!_G(flags)[kWolfFled] && !_G(flags)[V117]) {
 		if (!_G(flags)[V110])
-			_G(flags)[V131] = 402;
+			_G(flags)[kWolfLocation] = 402;
 		else if (inv_player_has("TURTLE"))
-			_G(flags)[V131] = 408;
+			_G(flags)[kWolfLocation] = 408;
 		else
-			_G(flags)[V131] = _G(flags)[V124] ? 402 : 403;
+			_G(flags)[kWolfLocation] = _G(flags)[V124] ? 402 : 403;
 	}
 
 	if (inv_player_has("PLANK")) {
@@ -93,7 +94,7 @@ void Room402::init() {
 			hotspot_set_active("WOLF", true);
 			hotspot_set_active("TOPIARY", true);
 
-			_G(flags)[V131] = 402;
+			_G(flags)[kWolfLocation] = 402;
 			_G(flags)[V318] = 0;
 
 			_ripPaysWolfie = series_load("RIP PAYS WOLFIE");
@@ -106,27 +107,22 @@ void Room402::init() {
 			_ripHeadTurn = series_load("RIP TREK HEAD TURN POS3");
 
 			_wolfieMach = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0x200, 0,
-				triggerMachineByHashCallbackNegative, "WOLFIE");
+				triggerMachineByHashCallback, "WOLFIE");
 			sendWSMessage_10000(1, _wolfieMach, _wolfClipping, 1, 10, 110,
 				_wolfClipping, 10, 10, 0);
-			_val12 = 2001;
-			_val13 = 2300;
-			ws_demand_facing(11);
+			_wolfMode = 2001;
+			_wolfShould = 2300;
+			ws_demand_facing(_G(my_walker), 11);
 
-			if (_G(kittyScreaming)) {
-				ws_demand_location(425, 285);
-				player_set_commands_allowed(true);
+			if (!_G(kittyScreaming)) {
+				ws_demand_location(_G(my_walker), 660, 290);
+				digi_play("402_S03", 1, 255, 19);
 			} else {
-				digi_preload("950_s22");
-				_ripDownStairs = series_load("RIP DOWN STAIRS");
-				ws_hide_walker();
-				_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0x600, 0,
-					triggerMachineByHashCallbackNegative, "rip leaving castle");
-				sendWSMessage_10000(1, _ripEnterLeave, _ripDownStairs, 1, 27, 55,
-					_ripDownStairs, 27, 27, 0);
+				ws_demand_location(_G(my_walker), 425, 285);
+				player_set_commands_allowed(true);
 			}
 
-		} else if (_G(flags)[V131] != 402) {
+		} else if (_G(flags)[kWolfLocation] != 402) {
 			hotspot_set_active("TOPIARY ", true);
 
 			switch (_G(game).previous_room) {
@@ -146,20 +142,20 @@ void Room402::init() {
 				_ripDownStairs = series_load("RIP DOWN STAIRS");
 				ws_hide_walker();
 				_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0x600, 0,
-					triggerMachineByHashCallbackNegative, "rip leaving castle");
+					triggerMachineByHashCallback, "rip leaving castle");
 				sendWSMessage_10000(1, _ripEnterLeave, _ripDownStairs, 1, 27, 55,
 					_ripDownStairs, 27, 27, 0);
 				break;
 
 			case 408:
-				ws_demand_location(517, 239, 3);
-				ws_walk(510, 260, 0, 50, 8);
+				ws_demand_location(_G(my_walker), 517, 239, 3);
+				ws_walk(_G(my_walker), 510, 260, nullptr, 50, 8);
 				break;
 
 			default:
 				digi_preload("950_s22");
-				ws_demand_location(660, 290, 3);
-				ws_walk(612, 287, nullptr, 50, 9);
+				ws_demand_location(_G(my_walker), 660, 290, 3);
+				ws_walk(_G(my_walker), 612, 287, nullptr, 50, 9);
 				midi_fade_volume(0, 120);
 				break;
 			}
@@ -177,14 +173,14 @@ void Room402::init() {
 				_wolfWantsMoney = series_load("WOLF WANTS MONEY");
 
 				_wolfieMach = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0x200, 0,
-					triggerMachineByHashCallbackNegative, "WOLFIE");
+					triggerMachineByHashCallback, "WOLFIE");
 
 				if (_val6) {
 					sendWSMessage_10000(1, _wolfieMach, _wolfWantsMoney, 16, 16, -1,
 						_wolfWantsMoney, 16, 16, 0);
 				} else {
-					_val12 = 2001;
-					_val13 = 2300;
+					_wolfMode = 2001;
+					_wolfShould = 2300;
 					sendWSMessage_10000(1, _wolfieMach, _wolfClipping, 1, 10, 110,
 						_wolfClipping, 10, 10, 0);
 				}
@@ -205,16 +201,16 @@ void Room402::init() {
 				ws_hide_walker();
 
 				_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0x600, 0,
-					triggerMachineByHashCallbackNegative, "rip leaving castle");
+					triggerMachineByHashCallback, "rip leaving castle");
 				sendWSMessage_10000(1, _ripEnterLeave, _ripDownStairs, 1, 27, 55,
 					_ripDownStairs, 27, 27, 0);
 				break;
 
 			case 408:
 				if (_G(flags)[V125] == 3) {
-					_G(flags)[GLB_TEMP_12] = 1;
+					_G(flags)[kWolfFled] = 1;
 					_G(flags)[V125] = 4;
-					_G(flags)[V131] = 999;
+					_G(flags)[kWolfLocation] = NOWHERE;
 
 					_wolfClipping = series_load("WOLF CLIPPING LOOP");
 					_wolfClippersDown = series_load("WOLF CLPRS DOWN TURNS POS9");
@@ -223,34 +219,34 @@ void Room402::init() {
 					_ripLeanWall = series_load("Rip leans against far wall");
 
 					_wolfieMach = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0x200, 0,
-						triggerMachineByHashCallbackNegative, "WOLFIE");
-					_val12 = 2001;
-					_val13 = 2300;
+						triggerMachineByHashCallback, "WOLFIE");
+					_wolfMode = 2001;
+					_wolfShould = 2300;
 
-					sendWSMessage_10000(1, _wolfieMach, _wolfClipping, 1, 10, 100,
+					sendWSMessage_10000(1, _wolfieMach, _wolfClipping, 1, 10, 110,
 						_wolfClipping, 10, 10, 0);
-					ws_demand_location(517, 239, 3);
-					ws_walk(503, 248, nullptr, 350, 7);
+					ws_demand_location(_G(my_walker), 517, 239, 3);
+					ws_walk(_G(my_walker), 503, 248, nullptr, 350, 7);
 				} else if (_G(flags)[V117] != 0 && inv_player_has("TURTLE")) {
 					_G(flags)[V117] = 0;
 					hotspot_set_active("TOPIARY ", true);
-					_G(flags)[V131] = 408;
-					ws_demand_location(517, 239, 3);
+					_G(flags)[kWolfLocation] = 408;
+					ws_demand_location(_G(my_walker), 517, 239, 3);
 
-					_wolfWalker = triggerMachineByHash_3000(8, 8, S4_NORMAL_DIRS, S4_SHADOW_DIRS,
+					_wolfWalker = triggerMachineByHash_3000(8, 8, *S4_NORMAL_DIRS, *S4_SHADOW_DIRS,
 						475, 300, 11, triggerMachineByHashCallback3000, "wolf_walker");
 					sendWSMessage_10000(_wolfWalker, 549, 239, 9, 42, 0);
 					kernel_timing_trigger(90, 40);
 				} else {
-					ws_demand_location(517, 239, 3);
-					ws_walk(449, 317, nullptr, 30, 3);
+					ws_demand_location(_G(my_walker), 517, 239, 3);
+					ws_walk(_G(my_walker), 449, 317, nullptr, 30, 3);
 				}
 				break;
 
 			default:
 				digi_preload("950_s22");
-				ws_demand_location(660, 290, 3);
-				ws_walk(449, 317, nullptr, 30, 3);
+				ws_demand_location(_G(my_walker), 660, 290, 3);
+				ws_walk(_G(my_walker), 449, 317, nullptr, 30, 3);
 				midi_fade_volume(0, 120);
 
 				if (inv_player_has("TURTLE"))
@@ -263,14 +259,14 @@ void Room402::init() {
 	if (_G(flags)[V139]) {
 		_wolfClipping = series_load("WOLF CLIPPING LOOP");
 		_wolfieMach = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0x200, 0,
-			triggerMachineByHashCallbackNegative, "WOLFIE");
-		_val12 = 2001;
-		_val13 = 2300;
+			triggerMachineByHashCallback, "WOLFIE");
+		_wolfMode = 2001;
+		_wolfShould = 2300;
 
 		sendWSMessage_10000(1, _wolfieMach, _wolfClipping, 1, 10, 110,
 			_wolfClipping, 10, 10, 0);
-		ws_demand_location(517, 239, 3);
-		ws_walk(510, 260, nullptr, 370, 8);
+		ws_demand_location(_G(my_walker), 517, 239, 3);
+		ws_walk(_G(my_walker), 510, 260, nullptr, 370, 8);
 	}
 
 	digi_play_loop("950_s22", 3, 120);
@@ -281,7 +277,7 @@ void Room402::daemon() {
 
 	switch (_G(kernel).trigger) {
 	case 19:
-		ws_walk(449, 317, nullptr, 20, 3);
+		ws_walk(_G(my_walker), 449, 317, nullptr, 20, 3);
 		midi_fade_volume(0, 120);
 		break;
 
@@ -323,7 +319,7 @@ void Room402::daemon() {
 	case 27:
 		ws_hide_walker();
 		_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0x100, 0,
-			triggerMachineByHashCallbackNegative, "RIP talks to Wolife");
+			triggerMachineByHashCallback, "RIP talks to Wolife");
 		sendWSMessage_10000(1, _ripEnterLeave, _ripTalkWolf, 1, 13, 28,
 			_ripTalkWolf, 13, 13, 0);
 		digi_play("402r03", 1);
@@ -346,17 +342,17 @@ void Room402::daemon() {
 		sendWSMessage_110000(32);
 		break;
 
-	case 31:
+	case 32:
 		digi_play("402r29", 1, 255, 33);
 		sendWSMessage_120000(-1);
 		break;
 
-	case 32:
+	case 33:
 		sendWSMessage_110000(-1);
 		digi_play("402w09", 1, 255, 34);
 		break;
 
-	case 33:
+	case 34:
 		sendWSMessage_150000(35);
 		break;
 
@@ -366,7 +362,7 @@ void Room402::daemon() {
 		break;
 
 	case 40:
-		ws_walk(510, 260, nullptr, -1, 8);
+		ws_walk(_G(my_walker), 510, 260, nullptr, -1, 8);
 		break;
 
 	case 42:
@@ -381,14 +377,15 @@ void Room402::daemon() {
 	case 55:
 		terminateMachineAndNull(_ripEnterLeave);
 		series_unload(_ripDownStairs);
-		ws_demand_location(345, 275, 3);
-		ws_walk(375, 279, nullptr,
-			(_G(flags)[V131] == 402) ? 56 : 50,
-			1);
+		ws_unhide_walker();
+		ws_demand_location(_G(my_walker), 345, 275, 3);
+		ws_walk(_G(my_walker), 375, 279, nullptr,
+			(_G(flags)[kWolfLocation] == 402) ? 56 : 50,
+			4);
 		break;
 
 	case 56:
-		ws_walk(449, 317, nullptr, 30, 3);
+		ws_walk(_G(my_walker), 449, 317, nullptr, 30, 3);
 		break;
 
 	case 100:
@@ -401,7 +398,7 @@ void Room402::daemon() {
 			_val11 = 1105;
 			break;
 		case 1001:
-			_val5 = (_G(flags)[V132]) ? 300 : 1112;
+			_trigger1 = (_G(flags)[V132]) ? 300 : 1112;
 			break;
 
 		default:
@@ -429,18 +426,18 @@ void Room402::daemon() {
 
 				_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0,
 					_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0x100, 0,
-					triggerMachineByHashCallbackNegative, "rip talks wolf");
+					triggerMachineByHashCallback, "rip talks wolf");
 				_safariShadow = TriggerMachineByHash(1, 1, 0, 0, 0, 0,
 					_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0x100, 0,
-					triggerMachineByHashCallbackNegative, "rip talks wolf SHADOW");
+					triggerMachineByHashCallback, "rip talks wolf SHADOW");
 
 				sendWSMessage_10000(1, _ripEnterLeave, _ripTalker, 1, 1, -1,
 					_ripTalker, 1, 1, 0);
 				sendWSMessage_10000(1, _safariShadow, _shadow3, 1, 1, 102,
 					_shadow3, 1, 1, 0);
 				_val11 = 1101;
-				_val12 = 2000;
-				_val13 = 2100;
+				_wolfMode = 2000;
+				_wolfShould = 2100;
 				kernel_timing_trigger(1, 110);
 				break;
 
@@ -492,12 +489,12 @@ void Room402::daemon() {
 
 				if (_G(flags)[V115] && !_val8) {
 					_val6 = 1;
-					_val12 = 2000;
-					_val13 = 2230;
+					_wolfMode = 2000;
+					_wolfShould = 2230;
 				} else {
 					_val8 = 0;
-					_val12 = 2001;
-					_val13 = 2300;
+					_wolfMode = 2001;
+					_wolfShould = 2300;
 				}
 
 				player_set_commands_allowed(true);
@@ -506,7 +503,7 @@ void Room402::daemon() {
 			case 1120:
 				terminateMachineAndNull(_ripEnterLeave);
 				_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0x100, 0,
-					triggerMachineByHashCallbackNegative, "rip talks wolf");
+					triggerMachineByHashCallback, "rip talks wolf");
 				_val11 = 1122;
 				_letter = series_load("RIP SHOWS WOLF THE LETTER");
 				sendWSMessage_10000(1, _ripEnterLeave, _letter, 1, 12, 103,
@@ -535,7 +532,7 @@ void Room402::daemon() {
 
 				_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0,
 					_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0x100, 0,
-					triggerMachineByHashCallbackNegative, "rip talks wolf");
+					triggerMachineByHashCallback, "rip talks wolf");
 				_val10 = 1000;
 				_val11 = 1103;
 				sendWSMessage_10000(1, _ripEnterLeave, _ripTalker, 1, 1, 102,
@@ -554,12 +551,12 @@ void Room402::daemon() {
 				player_update_info();
 				_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0,
 					_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0x100, 0,
-					triggerMachineByHashCallbackNegative, "rip talks wolf");
+					triggerMachineByHashCallback, "rip talks wolf");
 
 				player_update_info();
 				_safariShadow = TriggerMachineByHash(1, 1, 0, 0, 0, 0,
 					_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0x200, 0,
-					triggerMachineByHashCallbackNegative, "rip talks wolf SHADOW");
+					triggerMachineByHashCallback, "rip talks wolf SHADOW");
 				sendWSMessage_10000(1, _safariShadow, _shadow3, 1, 1, -1,
 					_shadow3, 1, 1, 0);
 				ws_hide_walker();
@@ -567,8 +564,8 @@ void Room402::daemon() {
 				sendWSMessage_10000(1, _ripEnterLeave, _ripTalker, 1, 1, -1,
 					_ripTalker, 1, 1, 0);
 				player_set_commands_allowed(false);
-				_val12 = 2002;
-				_val13 = 2141;
+				_wolfMode = 2002;
+				_wolfShould = 2141;
 				kernel_timing_trigger(1, 110);
 
 				_val11 = 1111;
@@ -601,18 +598,18 @@ void Room402::daemon() {
 				_G(flags)[V112] = 0;
 
 				if (_currentNode == 19 || _currentNode == 22 || _currentNode == 23) {
-					_val12 = 2002;
-					_val13 = 2190;
+					_wolfMode = 2002;
+					_wolfShould = 2190;
 					kernel_timing_trigger(1, 110);
 				} else if (!_G(flags)[V115]) {
-					_val12 = 2001;
-					_val13 = 2300;
+					_wolfMode = 2001;
+					_wolfShould = 2300;
 					player_set_commands_allowed(true);
 				} else {
 					_val6 = 1;
 
 					if (!_sound2.empty()) {
-						_val13 = 2142;
+						_wolfShould = 2142;
 						_val11 = 1113;
 						digi_play(_sound2.c_str(), 1, 255, 103);
 						_sound2.clear();
@@ -621,7 +618,7 @@ void Room402::daemon() {
 				break;
 
 			case 1113:
-				_val13 = 2150;
+				_wolfShould = 2150;
 				break;
 
 			case 1114:
@@ -646,33 +643,33 @@ void Room402::daemon() {
 		break;
 
 	case 110:
-		switch (_val12) {
+		switch (_wolfMode) {
 		case 2000:
-			if (_val5 == -1) {
+			if (_trigger1 == -1) {
 				kernel_timing_trigger(1, 111);
 			} else {
-				kernel_timing_trigger(1, _val5);
-				_val5 = -1;
+				kernel_timing_trigger(1, _trigger1);
+				_trigger1 = -1;
 			}
 			break;
 
 		case 2001:
-			if (_val13 == 2300) {
-				if (_val5 == -1) {
+			if (_wolfShould == 2300) {
+				if (_trigger1 == -1) {
 					kernel_timing_trigger(1, 111);
 				} else {
-					kernel_timing_trigger(1, _val5);
-					_val5 = -1;
+					kernel_timing_trigger(1, _trigger1);
+					_trigger1 = -1;
 				}
 			}
 			break;
 
 		case 2002:
-			if (_val5 == -1) {
+			if (_trigger1 == -1) {
 				kernel_timing_trigger(1, 111);
 			} else {
-				kernel_timing_trigger(1, _val5);
-				_val5 = -1;
+				kernel_timing_trigger(1, _trigger1);
+				_trigger1 = -1;
 			}
 			break;
 
@@ -682,13 +679,13 @@ void Room402::daemon() {
 		break;
 
 	case 111:
-		switch (_val12) {
+		switch (_wolfMode) {
 		case 2000:
-			switch (_val13) {
+			switch (_wolfShould) {
 			case 2100:
 				sendWSMessage_10000(1, _wolfieMach, _wolfClipping, 8, 8, 110,
 					_wolfClipping, 8, 8, 0);
-				_val13 = 2104;
+				_wolfShould = 2104;
 				break;
 
 			case 2101:
@@ -714,23 +711,23 @@ void Room402::daemon() {
 
 			case 2107:
 				_machine1 = series_stream("402 WOLF TAKE", 7, 0, 111);
-				_val13 = 2110;
+				_wolfShould = 2110;
 				break;
 
 			case 2108:
 				sendWSMessage_10000(1, _machine1, _machine1Series, 44, 16, 111,
 					_machine1Series, 16, 16, 0);
-				_val13 = 2110;
+				_wolfShould = 2110;
 				break;
 
 			case 2109:
 				kernel_timing_trigger(4, 111);
-				_val13 = 2108;
+				_wolfShould = 2108;
 				break;
 
 			case 2110:
 				terminateMachineAndNull(_machine1);
-				_val13 = 2101;
+				_wolfShould = 2101;
 				kernel_timing_trigger(1, 110);
 
 				if (!_sound2.empty()) {
@@ -745,14 +742,14 @@ void Room402::daemon() {
 				player_set_commands_allowed(false);
 				sendWSMessage_10000(1, _wolfieMach, _wolfClippersDown, 1, 8, 111,
 					_wolfClippersDown, 8, 8, 0);
-				_val13 = 2231;
+				_wolfShould = 2231;
 				break;
 
 			case 2231:
 				digi_play("402_s04", 2);
 				sendWSMessage_10000(1, _wolfieMach, _wolfClippersDown, 8, 43, 111,
 					_wolfClippersDown, 43, 43, 0);
-				_val13 = 2232;
+				_wolfShould = 2232;
 				break;
 
 			case 2232:
@@ -761,14 +758,14 @@ void Room402::daemon() {
 					_sound2.clear();
 				}
 
-				_val13 = 2233;
+				_wolfShould = 2233;
 				sendWSMessage_10000(1, _wolfieMach, _wolfWantsMoney, 1, 16, 111,
 					_wolfWantsMoney, 16, 16, 0);
 				break;
 
 			case 2233:
 				if (_G(flags)[V111] > 0) {
-					_val13 = 2234;
+					_wolfShould = 2234;
 					series_stream("Rip popup", 7, 0, 111);
 				} else {
 					player_set_commands_allowed(true);
@@ -781,19 +778,19 @@ void Room402::daemon() {
 
 			case 2240:
 				_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0x100, 0,
-					triggerMachineByHashCallbackNegative, "rip talks wolf");
+					triggerMachineByHashCallback, "rip talks wolf");
 				player_update_info();
 
 				_safariShadow = TriggerMachineByHash(1, 1, 0, 0, 0, 0,
 					_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0x200, 0,
-					triggerMachineByHashCallbackNegative, "rip talks wolf SHADOW");
+					triggerMachineByHashCallback, "rip talks wolf SHADOW");
 				sendWSMessage_10000(1, _safariShadow, _shadow3, 1, 1, -1,
 					_shadow3, 1, 1, 0);
 				ws_hide_walker();
 
 				sendWSMessage_10000(1, _ripEnterLeave, _ripTalkWolf, 1, 7, 111,
 					_ripTalkWolf, 7, 7, 0);
-				_val13 = 2242;
+				_wolfShould = 2242;
 				break;
 
 			case 2242:
@@ -805,18 +802,18 @@ void Room402::daemon() {
 			case 2250:
 				sendWSMessage_10000(1, _wolfieMach, _wolfWantsMoney, 16, 1, 111,
 					_wolfWantsMoney, 1, 1, 0);
-				_val13 = 2252;
+				_wolfShould = 2252;
 				break;
 
 			case 2252:
 				sendWSMessage_10000(1, _wolfieMach, _wolfClippersDown, 43, 1, 111,
 					_wolfClipping, 1, 1, 0);
-				_val13 = 2253;
+				_wolfShould = 2253;
 				break;
 
 			case 2253:
-				_val12 = 2001;
-				_val13 = 2300;
+				_wolfMode = 2001;
+				_wolfShould = 2300;
 				kernel_timing_trigger(1, 110);
 
 				if (!player_said("enter", "CASTLE DOOR") && !_G(flags)[V052]) {
@@ -830,7 +827,7 @@ void Room402::daemon() {
 			break;
 
 		case 2001:
-			if (_val13 == 2300) {
+			if (_wolfShould == 2300) {
 				sendWSMessage_10000(1, _wolfieMach, _wolfClipping, 1, 10, 110,
 					_wolfClipping, 10, 10, 0);
 				kernel_timing_trigger(35, 10000);
@@ -838,11 +835,11 @@ void Room402::daemon() {
 			break;
 
 		case 2002:
-			switch (_val13) {
+			switch (_wolfShould) {
 			case 2141:
 				sendWSMessage_10000(1, _wolfieMach, _wolfShakesHead, 1, 1, 110,
 					_wolfShakesHead, 1, 1, 0);
-				_val13 = 2143;
+				_wolfShould = 2143;
 				break;
 
 			case 2142:
@@ -857,7 +854,7 @@ void Room402::daemon() {
 				break;
 
 			case 2150:
-				_val13 = 2152;
+				_wolfShould = 2152;
 				sendWSMessage_10000(1, _wolfieMach, _wolfWantsMoney, 1, 16, 111,
 					_wolfWantsMoney, 16, 16, 0);
 
@@ -868,7 +865,7 @@ void Room402::daemon() {
 				break;
 
 			case 2152:
-				_val13 = 2153;
+				_wolfShould = 2153;
 
 				if (_G(flags)[V111] > 0) {
 					_machine1 = series_stream("Rip popup", 7, 0, 111);
@@ -884,18 +881,18 @@ void Room402::daemon() {
 			case 2160:
 				sendWSMessage_10000(1, _wolfieMach, _wolfClippersDown, 43, 1, 111,
 					_wolfClipping, 1, 1, 0);
-				_val13 = 2162;
+				_wolfShould = 2162;
 				break;
 
 			case 2162:
-				_val12 = 2000;
-				_val13 = 2104;
+				_wolfMode = 2000;
+				_wolfShould = 2104;
 				kernel_timing_trigger(1, 110);
 				conv_resume();
 				break;
 
 			case 2170:
-				_val13 = 2272;
+				_wolfShould = 2272;
 				sendWSMessage_10000(1, _wolfieMach, _wolfWantsMoney, 1, 16, -1,
 					_wolfWantsMoney, 16, 16, 0);
 
@@ -906,19 +903,19 @@ void Room402::daemon() {
 				break;
 
 			case 2180:
-				_val13 = 2181;
+				_wolfShould = 2181;
 				digi_play(_sound2.c_str(), 1, 255, 111);
 				break;
 
 			case 2181:
-				_val13 = 2182;
+				_wolfShould = 2182;
 				sendWSMessage_10000(1, _wolfieMach, _wolfWantsMoney, 16, 1, 111,
 					_wolfWantsMoney, 1, 1, 0);
 				break;
 
 			case 2182:
-				_val12 = 2002;
-				_val13 = 2143;
+				_wolfMode = 2002;
+				_wolfShould = 2143;
 				kernel_timing_trigger(1, 110);
 				conv_resume();
 				break;
@@ -931,18 +928,18 @@ void Room402::daemon() {
 
 				sendWSMessage_10000(1, _wolfieMach, _wolfWantsMoney, 16, 1, 111,
 					_wolfWantsMoney, 1, 1, 0);
-				_val13 = 2192;
+				_wolfShould = 2192;
 				break;
 
 			case 2192:
 				sendWSMessage_10000(1, _wolfieMach, _wolfClippersDown, 43, 1, 111,
 					_wolfClipping, 1, 1, 0);
-				_val13 = 2193;
+				_wolfShould = 2193;
 				break;
 
 			case 2193:
-				_val12 = 2001;
-				_val13 = 2300;
+				_wolfMode = 2001;
+				_wolfShould = 2300;
 				kernel_timing_trigger(1, 110);
 				player_set_commands_allowed(true);
 				break;
@@ -950,14 +947,14 @@ void Room402::daemon() {
 			case 2260:
 				sendWSMessage_10000(1, _wolfieMach, _wolfClippersDown, 1, 8, 111,
 					_wolfClippersDown, 8, 8, 0);
-				_val13 = 2261;
+				_wolfShould = 2261;
 				break;
 
 			case 2261:
 				digi_play("402_s04", 2);
 				sendWSMessage_10000(1, _wolfieMach, _wolfClippersDown, 8, 43, 111,
 					_wolfClippersDown, 43, 43, 0);
-				_val13 = 2262;
+				_wolfShould = 2262;
 				break;
 
 			case 2262:
@@ -973,7 +970,7 @@ void Room402::daemon() {
 						_sound2.clear();
 					}
 				} else {
-					_val13 = 2263;
+					_wolfShould = 2263;
 
 					if (!_sound2.empty()) {
 						digi_play(_sound2.c_str(), 1, 255, 111);
@@ -990,12 +987,12 @@ void Room402::daemon() {
 			case 2263:
 				sendWSMessage_10000(1, _wolfieMach, _wolfWantsMoney, 1, 16, 110,
 					_wolfWantsMoney, 16, 16, 0);
-				_val13 = 2264;
+				_wolfShould = 2264;
 				break;
 
 			case 2264:
 				_machine1 = series_stream("Rip popup", 7, 0, 111);
-				_val13 = 2265;
+				_wolfShould = 2265;
 				break;
 
 			case 2265:
@@ -1026,12 +1023,12 @@ void Room402::daemon() {
 
 	case 200:
 		_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0x100, 0,
-			triggerMachineByHashCallbackNegative, "rip talks wolf");
+			triggerMachineByHashCallback, "rip talks wolf");
 
 		player_update_info();
 		_safariShadow = TriggerMachineByHash(1, 1, 0, 0, 0, 0,
 			_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0x200, 0,
-			triggerMachineByHashCallbackNegative, "rip talks wolf SHADOW");
+			triggerMachineByHashCallback, "rip talks wolf SHADOW");
 		sendWSMessage_10000(1, _ripEnterLeave, _ripTalkWolf, 1, 7, -1,
 			_ripTalkWolf, 7, 7, 0);
 		sendWSMessage_10000(1, _wolfieMach, _wolfClippersDown, 1, 8, 201,
@@ -1093,11 +1090,11 @@ void Room402::daemon() {
 
 	case 210:
 		_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0x100, 0,
-			triggerMachineByHashCallbackNegative, "rip talks wolf");
+			triggerMachineByHashCallback, "rip talks wolf");
 		player_update_info();
 		_safariShadow = TriggerMachineByHash(1, 1, 0, 0, 0, 0,
 			_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0x200, 0,
-			triggerMachineByHashCallbackNegative, "rip talks wolf SHADOW");
+			triggerMachineByHashCallback, "rip talks wolf SHADOW");
 
 		sendWSMessage_10000(1, _safariShadow, _shadow3, 1, 1, -1,
 			_shadow3, 1, 1, 0);
@@ -1157,7 +1154,7 @@ void Room402::daemon() {
 		terminateMachineAndNull(_ripEnterLeave);
 		terminateMachineAndNull(_safariShadow);
 		ws_unhide_walker();
-		_val5 = -1;
+		_trigger1 = -1;
 		_val10 = 1001;
 		_val11 = 1110;
 		kernel_timing_trigger(1, 102);
@@ -1165,11 +1162,11 @@ void Room402::daemon() {
 
 	case 221:
 		_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0x100, 0,
-			triggerMachineByHashCallbackNegative, "rip talks wolf");
+			triggerMachineByHashCallback, "rip talks wolf");
 		player_update_info();
 		_safariShadow = TriggerMachineByHash(1, 1, 0, 0, 0, 0,
 			_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0x200, 0,
-			triggerMachineByHashCallbackNegative, "rip talks wolf SHADOW");
+			triggerMachineByHashCallback, "rip talks wolf SHADOW");
 
 		sendWSMessage_10000(1, _safariShadow, _shadow3, 1, 1, -1,
 			_shadow3, 1, 1, 0);
@@ -1218,11 +1215,11 @@ void Room402::daemon() {
 
 	case 230:
 		_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0x100, 0,
-			triggerMachineByHashCallbackNegative, "trip talks wolf");
+			triggerMachineByHashCallback, "trip talks wolf");
 		player_update_info();
 		_safariShadow = TriggerMachineByHash(1, 1, 0, 0, 0, 0,
 			_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0x200, 0,
-			triggerMachineByHashCallbackNegative, "rip talks wolf SHADOW");
+			triggerMachineByHashCallback, "rip talks wolf SHADOW");
 
 		sendWSMessage_10000(1, _safariShadow, _shadow3, 1, 1, -1,
 			_shadow3, 1, 1, 0);
@@ -1254,8 +1251,8 @@ void Room402::daemon() {
 		break;
 
 	case 237:
-		_val12 = 2001;
-		_val13 = 2300;
+		_wolfMode = 2001;
+		_wolfShould = 2300;
 		player_set_commands_allowed(true);
 		kernel_timing_trigger(1, 110);
 		break;
@@ -1268,7 +1265,7 @@ void Room402::daemon() {
 
 	case 302:
 		terminateMachineAndNull(_wolfieMach);
-		_wolfWalker = triggerMachineByHash_3000(8, 8, S4_NORMAL_DIRS, S4_SHADOW_DIRS,
+		_wolfWalker = triggerMachineByHash_3000(8, 8, *S4_NORMAL_DIRS, *S4_SHADOW_DIRS,
 			484, 315, 11, triggerMachineByHashCallback3000, "wolf_walker");
 		sendWSMessage_10000(_wolfWalker, 517, 239, 9, -1, 0);
 
@@ -1281,7 +1278,7 @@ void Room402::daemon() {
 		terminateMachineAndNull(_safariShadow);
 		ws_unhide_walker();
 		_G(flags)[V114] = 0;
-		ws_walk(517, 239, nullptr, -1, 9);
+		ws_walk(_G(my_walker), 517, 239, nullptr, -1, 9);
 		kernel_timing_trigger(60, 304);
 		break;
 
@@ -1297,12 +1294,12 @@ void Room402::daemon() {
 	case 350:
 		ws_hide_walker();
 		_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0x100, 0,
-			triggerMachineByHashCallbackNegative, "rip leans against wall");
+			triggerMachineByHashCallback, "rip leans against wall");
 		sendWSMessage_10000(1, _ripEnterLeave, _ripLeanWall, 1, 23, 351,
 			_ripLeanWall, 23, 23, 0);
 
 		_turtlePopupMach = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0, 0,
-			triggerMachineByHashCallbackNegative, "TURTLE POPUP");
+			triggerMachineByHashCallback, "TURTLE POPUP");
 		_val14 = 0;
 		digi_preload("950_s27", 950);
 		break;
@@ -1310,7 +1307,7 @@ void Room402::daemon() {
 	case 351:
 		if (_val14 == 1) {
 			digi_play("950_s27", 3, 255, 353, 950);
-			_val5 = 354;
+			_trigger1 = 354;
 		} else {
 			digi_play("950_s27", 3, 255, 352, 950);
 			++_val14;
@@ -1343,7 +1340,7 @@ void Room402::daemon() {
 	case 357:
 		digi_play("402w11", 1);
 		terminateMachineAndNull(_wolfieMach);
-		_wolfWalker = triggerMachineByHash_3000(8, 8, S4_NORMAL_DIRS, S4_SHADOW_DIRS,
+		_wolfWalker = triggerMachineByHash_3000(8, 8, *S4_NORMAL_DIRS, *S4_SHADOW_DIRS,
 			484, 315, 11, triggerMachineByHashCallback3000, "wolf_walker");
 		sendWSMessage_10000(_wolfWalker, 517, 239, 9, -1, 0);
 		kernel_timing_trigger(150, 358);
@@ -1364,7 +1361,7 @@ void Room402::daemon() {
 
 	case 372:
 		digi_play("402r07", 1);
-		ws_walk(517, 239, nullptr, -1, 9);
+		ws_walk(_G(my_walker), 517, 239, nullptr, -1, 9);
 		kernel_timing_trigger(90, 373);
 		break;
 
@@ -1405,64 +1402,49 @@ void Room402::pre_parser() {
 	bool takeFlag = player_said("take");
 	bool lookFlag = player_said_any("look", "look at");
 
-	if (lookFlag && player_said(" ")) {
-		_G(player).need_to_walk = false;
-		_G(player).ready_to_walk = true;
-		_G(player).waiting_for_walk = false;
-	}
+	if (lookFlag && player_said(" "))
+		_G(player).resetWalk();
 
-	if (player_said("journal") && !takeFlag && !lookFlag && _G(kernel).trigger == -1) {
-		_G(player).need_to_walk = false;
-		_G(player).ready_to_walk = true;
-		_G(player).waiting_for_walk = false;
-	}
+	if (player_said("journal") && !takeFlag && !lookFlag && _G(kernel).trigger == -1)
+		_G(player).resetWalk();
 
-	if (player_said("DANZIG") && !player_said("ENTER", "DANZIG")) {
-		_G(player).need_to_walk = false;
-		_G(player).ready_to_walk = true;
-		_G(player).waiting_for_walk = false;
-	}
+	if (player_said("DANZIG") && !player_said("ENTER", "DANZIG"))
+		_G(player).resetWalk();
 
 	if (!_G(flags)[V112] && !player_said("WALK TO") &&
 		(!talkFlag || !player_said("WOLF")) &&
 		!player_said("POMERANIAN MARKS", "WOLF"))
 		_G(flags)[V112] = 1;
 
-	_val6 = 0;
+	if (_val6 == 0)
+		return;
 
 	if (player_said("POMERANIAN MARKS", "WOLF") && inv_player_has("POMERANIAN MARKS")) {
 		player_set_commands_allowed(false);
 		intr_cancel_sentence();
 		_G(flags)[V114] = 1;
-		_val12 = 2000;
-		_val13 = 2240;
+		_wolfMode = 2000;
+		_wolfShould = 2240;
 
-		_G(kernel).trigger_mode = KT_DAEMON;
 		_G(flags)[V111]++;
-		kernel_timing_trigger(1, 110);
-	} else if (_G(flags)[V116] || !player_said("WOLF") || (
-		(!player_said("US DOLLARS") || !inv_player_has("US DOLLARS")) &&
-		(!player_said("CHINESE YUAN") || !inv_player_has("CHINESE YUAN")) &&
-		(!player_said("PERUVIAN INTI") || !inv_player_has("PERUVIAN INTI")) &&
-		(!player_said("SIKKIMESE RUPEE") || !inv_player_has("SIKKIMESE RUPEE"))
-	)) {
+		kernel_timing_trigger(1, 110, KT_DAEMON, KT_PREPARSE);
+
+	} else if (!_G(flags)[V116] && player_said("WOLF") && (
+			HAS("US DOLLARS") || HAS("CHINESE YUAN") ||
+			HAS("PERUVIAN INTI") || HAS("SIKKIMESE RUPEE"))) {
+		player_set_commands_allowed(false);
+		_G(flags)[V116] = 1;
+		intr_cancel_sentence();
+		kernel_timing_trigger(1, 230, KT_DAEMON, KT_PREPARSE);
+	} else {
 		if (talkFlag && player_said("WOLF"))
 			intr_cancel_sentence();
 
 		player_set_commands_allowed(false);
-		_val12 = 2000;
-		_val13 = 2250;
-		_G(kernel).trigger_mode = KT_DAEMON;
-		kernel_timing_trigger(1, 110);
-	} else {
-		player_set_commands_allowed(false);
-		_G(flags)[V116] = 1;
-		intr_cancel_sentence();
-		_G(kernel).trigger_mode = KT_DAEMON;
-		kernel_timing_trigger(1, 230);
+		_wolfMode = 2000;
+		_wolfShould = 2250;
+		kernel_timing_trigger(1, 110, KT_DAEMON, KT_PREPARSE);
 	}
-
-	_G(kernel).trigger_mode = KT_PREPARSE;
 }
 
 void Room402::parser() {
@@ -1480,7 +1462,7 @@ void Room402::parser() {
 		}
 	} else if (talkFlag && player_said("WOLF")) {
 		player_set_commands_allowed(false);
-		_val5 = -1;
+		_trigger1 = -1;
 		_val10 = 1000;
 		_val11 = 1100;
 
@@ -1506,10 +1488,10 @@ void Room402::parser() {
 			_G(flags)[V114] = 1;
 			_G(flags)[V111]++;
 			player_set_commands_allowed(false);
-			_val5 = 210;
+			_trigger1 = 210;
 		} else {
 			player_set_commands_allowed(false);
-			_val5 = 200;
+			_trigger1 = 200;
 		}
 	}
 #define MONEY(ITEM) (player_said("WOLF") && player_said(ITEM) && inv_player_has(ITEM))
@@ -1518,7 +1500,7 @@ void Room402::parser() {
 		if (!_G(flags)[V116]) {
 			_G(flags)[V116] = 1;
 			player_set_commands_allowed(false);
-			_val5 = 221;
+			_trigger1 = 221;
 		}
 	}
 #undef MONEY
@@ -1526,7 +1508,7 @@ void Room402::parser() {
 		switch (_G(kernel).trigger) {
 		case -1:
 			player_set_commands_allowed(false);
-			ws_walk(517, 239, nullptr, 2, 11);
+			ws_walk(_G(my_walker), 517, 239, nullptr, 2, 11);
 			break;
 		case 2:
 			disable_player_commands_and_fade_init(3);
@@ -1562,13 +1544,13 @@ void Room402::parser() {
 		if (_G(flags)[kCastleCartoon])
 			digi_play("com016", 1);
 		else if (_G(kernel).trigger == -1)
-			ws_walk(190, 333, nullptr, 8, 2);
+			ws_walk(_G(my_walker), 190, 333, nullptr, 8, 2);
 		else {
 			if (_G(kernel).trigger == 6) {
 				_G(flags)[kCastleCartoon] = 1;
 				_G(flags)[V089] = 1;
 			}
-			sendWSMessage_multi("com015");
+			sketchInJournal("com015");
 		}
 	} else if (lookFlag && player_said(" ")) {
 		digi_play("402r08", 1);
@@ -1593,8 +1575,8 @@ void Room402::conv402a() {
 		case 4:
 		case 9:
 			_sound2 = sound;
-			_val12 = 2000;
-			_val13 = 2107;
+			_wolfMode = 2000;
+			_wolfShould = 2107;
 			break;
 
 		case 5:
@@ -1604,8 +1586,8 @@ void Room402::conv402a() {
 			if (inv_player_has("POMERANIAN MARKS")) {
 				conv_resume();
 			} else {
-				_val12 = 2002;
-				_val13 = 2260;
+				_wolfMode = 2002;
+				_wolfShould = 2260;
 			}
 			break;
 
@@ -1614,12 +1596,12 @@ void Room402::conv402a() {
 			switch (entry) {
 			case 1:
 				digi_play(sound, 1);
-				_val12 = 2002;
-				_val13 = 2160;
+				_wolfMode = 2002;
+				_wolfShould = 2160;
 				break;
 
 			default:
-				_val13 = 2142;
+				_wolfShould = 2142;
 				digi_play(sound, 1, 255, 777);
 				break;
 			}
@@ -1629,19 +1611,19 @@ void Room402::conv402a() {
 			switch (entry) {
 			case 0:
 				_sound2 = sound;
-				_val12 = 2002;
-				_val13 = 2260;
+				_wolfMode = 2002;
+				_wolfShould = 2260;
 				break;
 			case 1:
 				_sound2 = sound;
 
 				if (inv_player_has("POMERANIAN MARKS")) {
-					_val12 = 2002;
-					_val13 = 2143;
+					_wolfMode = 2002;
+					_wolfShould = 2143;
 					conv_resume();
 				} else {
-					_val12 = 2002;
-					_val13 = 2170;
+					_wolfMode = 2002;
+					_wolfShould = 2170;
 				}
 				break;
 			default:
@@ -1653,13 +1635,13 @@ void Room402::conv402a() {
 			switch (entry) {
 			case 0:
 				_sound2 = sound;
-				_val12 = 2002;
-				_val13 = 2260;
+				_wolfMode = 2002;
+				_wolfShould = 2260;
 				break;
 			case 1:
 				_sound2 = sound;
-				_val12 = 2002;
-				_val13 = 2143;
+				_wolfMode = 2002;
+				_wolfShould = 2143;
 				break;
 			default:
 				break;
@@ -1676,10 +1658,10 @@ void Room402::conv402a() {
 		case 21:
 			if (entry == 1) {
 				_sound2 = sound;
-				_val12 = 2002;
-				_val13 = 2260;
+				_wolfMode = 2002;
+				_wolfShould = 2260;
 			} else {
-				_val13 = 201;
+				_wolfShould = 201;
 				digi_play(sound, 1, 255, 777);
 			}
 			break;
@@ -1695,20 +1677,20 @@ void Room402::conv402a() {
 		case 26:
 			switch (entry) {
 			case 0:
-				_val13 = 2101;
+				_wolfShould = 2101;
 				digi_play(sound, 1, 255, 777);
 				break;
 
 			case 1:
 				_sound2 = sound;
-				_val12 = 2002;
-				_val13 = 2260;
+				_wolfMode = 2002;
+				_wolfShould = 2260;
 				break;
 
 			case 2:
 				_sound2 = sound;
-				_val12 = 2002;
-				_val13 = 2143;
+				_wolfMode = 2002;
+				_wolfShould = 2143;
 				conv_resume();
 				break;
 
@@ -1736,12 +1718,12 @@ void Room402::conv402a() {
 		case 53:
 		case 54:
 			_val8 = 1;
-			_val13 = 201;
+			_wolfShould = 201;
 			digi_play(sound, 1, 255, 777);
 			break;
 
 		default:
-			_val13 = (_val12 == 2002) ? 2142 : 2101;
+			_wolfShould = (_wolfMode == 2002) ? 2142 : 2101;
 			digi_play(sound, 1, 255, 777);
 			break;
 		}
@@ -1779,8 +1761,8 @@ void Room402::conv402a() {
 				_val10 = 1001;
 				_val11 = 1115;
 				_sound2 = sound;
-				_val12 = 2002;
-				_val13 = 2180;
+				_wolfMode = 2002;
+				_wolfShould = 2180;
 
 				_G(kernel).trigger_mode = KT_DAEMON;
 				kernel_timing_trigger(1, 110);
@@ -1812,7 +1794,7 @@ void Room402::conv402a777() {
 			kernel_timing_trigger(1, 102);
 			_G(kernel).trigger_mode = KT_PARSE;
 		} else {
-			_val13 = (_val12 == 2002) ? 2143 : 2104;
+			_wolfShould = (_wolfMode == 2002) ? 2143 : 2104;
 			conv_resume();
 		}
 	} else if (who == 1) {
@@ -1830,7 +1812,7 @@ void Room402::useTopiary() {
 		_safariShadow = series_place_sprite("SAFARI SHADOW 3", 0,
 			_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0xf00);
 		_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, -53, 100, 0x200, 0,
-			triggerMachineByHashCallbackNegative, "rip entering castle");
+			triggerMachineByHashCallback, "rip entering castle");
 		sendWSMessage_10000(1, _ripEnterLeave, _ripMessesBush, 1, 10, 1,
 			_ripMessesBush, 10, 10, 0);
 		break;
@@ -1848,6 +1830,7 @@ void Room402::useTopiary() {
 		}
 
 		_branch = series_place_sprite("sprite of the pulled out branch", 0, 0, -53, 100, 0x300);
+		terminateMachineAndNull(_ripEnterLeave);
 		series_unload(_ripMessesBush);
 		terminateMachineAndNull(_safariShadow);
 		ws_unhide_walker();
@@ -1869,7 +1852,7 @@ void Room402::enterCastle() {
 		ws_hide_walker();
 
 		_ripEnterLeave = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0x600, 0,
-			triggerMachineByHashCallbackNegative, "rip entering castle");
+			triggerMachineByHashCallback, "rip entering castle");
 		sendWSMessage_10000(1, _ripEnterLeave, _ripClimbKnock, 1,
 			69, 1, _ripClimbKnock, 69, 69, 0);
 		break;
@@ -1886,7 +1869,7 @@ void Room402::enterCastle() {
 
 	case 3:
 		_castleDoor = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0, 0,
-			triggerMachineByHashCallbackNegative, "castle door");
+			triggerMachineByHashCallback, "castle door");
 		sendWSMessage_10000(1, _castleDoor, _doorOpens, 1, 2, -1,
 			_doorOpens, 2, 2, 0);
 		digi_play("402_S05", 1, 255, 4);

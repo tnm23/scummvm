@@ -31,7 +31,7 @@ namespace Riddle {
 
 #define FLAGS_COUNT 512
 
-enum {
+enum Flag {
 	V000 =   0,
 	V001 =   1,
 	V002 =   2,
@@ -50,7 +50,7 @@ enum {
 	V015 =  15,
 	V016 =  16,
 	V017 =  17,
-	V018 =  18,
+	kWolfFled =  18,
 	V019 =  19,
 	V020 =  20,
 	V021 =  21,
@@ -62,7 +62,7 @@ enum {
 	V027 =  27,
 	V028 =  28,
 	V029 =  29,
-	V030 =  30,
+	kLeftCastleUnderground =  30,
 	V031 =  31,
 	V032 =  32,
 	V033 =  33,
@@ -162,9 +162,9 @@ enum {
 	V126 = 126,
 	V127 = 127,
 	V128 = 128,
-	V129 = 129,
+	kTravelDest = 129,
 	kCastleCartoon = 130,
-	V131 = 131,
+	kWolfLocation = 131,
 	V132 = 132,
 	V133 = 133,
 	V134 = 134,
@@ -251,11 +251,11 @@ enum {
 	V214 = 214,
 	kTempleCartoon = 215,
 	V216 = 216,
-	V217 = 217,
+	V217 = 217, // Prayer wheel in niche, room 703
 	V218 = 218,
-	V219 = 219,
-	V220 = 220,
-	V221 = 221,
+	V219 = 219, // Prayer wheel in niche, room 704 / 706
+	V220 = 220, // prayer wheel (left), room 705
+	V221 = 221, // prayer wheel (right), room 705
 	V222 = 222,
 	V223 = 223,
 	V224 = 224,
@@ -286,10 +286,10 @@ enum {
 	V249 = 249,
 	V250 = 250,
 	V251 = 251,
-	V252 = 252,
-	V253 = 253,
-	V254 = 254,
-	V255 = 255,
+	kTerracottaSoldiers = 252,
+	kRiceSackMoved = 253,
+	kDugInWall = 254,
+	kOpenedHoleInWall = 255,
 	V256 = 256,
 	V257 = 257,
 	V258 = 258,
@@ -297,7 +297,7 @@ enum {
 	V260 = 260,
 	V261 = 261,
 	V262 = 262,
-	V263 = 263,
+	V263 = 263, // Set after the first walk in room 809
 	V264 = 264,
 	V265 = 265,
 	V266 = 266,
@@ -311,8 +311,8 @@ enum {
 	V274 = 274,
 	V275 = 275,
 	V276 = 276,
-	V277 = 277,
-	V278 = 278,
+	V277 = 277, // look at "hole in chasm wall", 808 -> 1 when animation displayed once
+	V278 = 278, // look at "hole in bridge", 808 -> 1 when animation displayed once
 	V279 = 279,
 	V280 = 280,
 	V281 = 281,
@@ -341,23 +341,23 @@ enum {
 	V303 = 303,
 	V304 = 304,
 	V305 = 305,
-	V306 = 306,
+	kGamesCabinetOpen = 306,
 	V307 = 307,
 	V308 = 308,
 	kWritingDeskDrawerOpen = 309,
-	V310 = 310,
+	kCardSwitchRevealed = 310,
 	V311 = 311,
-	V312 = 312,
+	kBilliardsTableState = 312,
 	V313 = 313,
 	V314 = 314,
 	V315 = 315,
-	V316 = 316,
+	kCrackedMirror = 316,
 	V317 = 317,
 	V318 = 318,
 	V319 = 319,
 	V320 = 320,
-	V321 = 321,
-	V322 = 322,
+	kBilliardBallInCabinet = 321,
+	kBilliardsFan = 322,
 	V323 = 323,
 	V324 = 324,
 	V325 = 325,
@@ -369,11 +369,11 @@ enum {
 	V331 = 331,
 	V332 = 332,
 	kPaintingOpen = 333,
-	V334 = 334,
+	kButlerSaidWolfFled = 334,
 	V335 = 335,
 	V336 = 336,
 	V337 = 337,
-	V338 = 338,
+	kGermanBanknoteFound = 338,
 	V339 = 339,
 	V340 = 340,
 	V341 = 341,
@@ -566,9 +566,9 @@ public:
 	size_t size() const {
 		return FLAGS_COUNT;
 	}
-	int32 &operator[](uint idx) {
-		assert(idx < FLAGS_COUNT);
-		return _flags[idx];
+	int32 &operator[](Flag flag) {
+		assert((int)flag < FLAGS_COUNT);
+		return _flags[flag];
 	}
 
 	/**

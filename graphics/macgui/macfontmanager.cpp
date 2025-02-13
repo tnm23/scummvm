@@ -22,6 +22,7 @@
 #include "common/stream.h"
 #include "common/compression/unzip.h"
 #include "common/macresman.h"
+#include "common/tokenizer.h"
 #include "graphics/fonts/bdf.h"
 #include "graphics/fonts/macfont.h"
 #include "graphics/fonts/winfont.h"
@@ -40,35 +41,35 @@ static const struct FontProto {
 	Common::CodePage encoding;
 	const char *name;
 } defaultFonts[] = {
-	{ 2,		Common::UNK_LANG,	Common::kMacRoman,	"New York" },
-	{ 3,		Common::UNK_LANG,	Common::kMacRoman,	"Geneva" },
-	{ 4,		Common::UNK_LANG,	Common::kMacRoman,	"Monaco" },
-	{ 5,		Common::UNK_LANG,	Common::kMacRoman,	"Venice" },
-	{ 6,		Common::UNK_LANG,	Common::kMacRoman,	"London" },
-	{ 7,		Common::UNK_LANG,	Common::kMacRoman,	"Athens" },
-	{ 8,		Common::UNK_LANG,	Common::kMacRoman,	"San Francisco" },
-	{ 9,		Common::UNK_LANG,	Common::kMacRoman,	"Toronto" },
-	{ 11,		Common::UNK_LANG,	Common::kMacRoman,	"Cairo" },
-	{ 12,		Common::UNK_LANG,	Common::kMacRoman,	"Los Angeles" },
-	{ 13,		Common::UNK_LANG,	Common::kMacRoman,	"Zapf Dingbats" },
-	{ 14,		Common::UNK_LANG,	Common::kMacRoman,	"Bookman" },
-	{ 15,		Common::UNK_LANG,	Common::kMacRoman,	"Helvetica Narrow" },
-	{ 16,		Common::UNK_LANG,	Common::kMacRoman,	"Palatino" },
-	{ 18,		Common::UNK_LANG,	Common::kMacRoman,	"Zapf Chancery" },
-	{ 20,		Common::UNK_LANG,	Common::kMacRoman,	"Times" },
-	{ 21,		Common::UNK_LANG,	Common::kMacRoman,	"Helvetica" },
-	{ 22,		Common::UNK_LANG,	Common::kMacRoman,	"Courier" },
-	{ 23,		Common::UNK_LANG,	Common::kMacRoman,	"Symbol" },
-	{ 24,		Common::UNK_LANG,	Common::kMacRoman,	"Taliesin" }, // mobile?
-	{ 33,		Common::UNK_LANG,	Common::kMacRoman,	"Avant Garde" },
-	{ 34,		Common::UNK_LANG,	Common::kMacRoman,	"New Century Schoolbook" },
-	{ 16383,	Common::UNK_LANG,	Common::kMacRoman,	"Chicago" },
+	{ kMacFontNewYork,		Common::UNK_LANG,	Common::kMacRoman,	"New York" },
+	{ kMacFontGeneva,		Common::UNK_LANG,	Common::kMacRoman,	"Geneva" },
+	{ kMacFontMonaco,		Common::UNK_LANG,	Common::kMacRoman,	"Monaco" },
+	{ kMacFontVenice,		Common::UNK_LANG,	Common::kMacRoman,	"Venice" },
+	{ kMacFontLondon,		Common::UNK_LANG,	Common::kMacRoman,	"London" },
+	{ kMacFontAthens,		Common::UNK_LANG,	Common::kMacRoman,	"Athens" },
+	{ kMacFontSanFrancisco,		Common::UNK_LANG,	Common::kMacRoman,	"San Francisco" },
+	{ kMacFontToronto,		Common::UNK_LANG,	Common::kMacRoman,	"Toronto" },
+	{ kMacFontCairo,		Common::UNK_LANG,	Common::kMacRoman,	"Cairo" },
+	{ kMacFontLosAngeles,		Common::UNK_LANG,	Common::kMacRoman,	"Los Angeles" },
+	{ kMacFontZapfDingbats,		Common::UNK_LANG,	Common::kMacRoman,	"Zapf Dingbats" },
+	{ kMacFontBookman,		Common::UNK_LANG,	Common::kMacRoman,	"Bookman" },
+	{ kMacFontHelveticaNarrow,	Common::UNK_LANG,	Common::kMacRoman,	"Helvetica Narrow" },
+	{ kMacFontPalatino,		Common::UNK_LANG,	Common::kMacRoman,	"Palatino" },
+	{ kMacFontZapfChancery,		Common::UNK_LANG,	Common::kMacRoman,	"Zapf Chancery" },
+	{ kMacFontTimes,		Common::UNK_LANG,	Common::kMacRoman,	"Times" },
+	{ kMacFontHelvetica,		Common::UNK_LANG,	Common::kMacRoman,	"Helvetica" },
+	{ kMacFontCourier,		Common::UNK_LANG,	Common::kMacRoman,	"Courier" },
+	{ kMacFontSymbol,		Common::UNK_LANG,	Common::kMacRoman,	"Symbol" },
+	{ kMacFontTaliesin,		Common::UNK_LANG,	Common::kMacRoman,	"Taliesin" }, // mobile?
+	{ kMacFontAvantGarde,		Common::UNK_LANG,	Common::kMacRoman,	"Avant Garde" },
+	{ kMacFontNewCenturySchoolbook,	Common::UNK_LANG,	Common::kMacRoman,	"New Century Schoolbook" },
+	{ kMacFontChicago,		Common::UNK_LANG,	Common::kMacRoman,	"Chicago" },
 
 	// Japanese (names are Shift JIS encoded)
-	{ 16384,	Common::JA_JPN,		Common::kUtf8,		"Osaka" },
-	{ 16436,	Common::JA_JPN,		Common::kUtf8,		"Osaka\x81\x7C\x93\x99\x95\x9D" }, // Osaka Mono
+	{ kMacFontOsaka,		Common::JA_JPN,		Common::kUtf8,		"Osaka" },
+	{ kMacFontOsakaMono,		Common::JA_JPN,		Common::kUtf8,		"Osaka\x81\x7C\x93\x99\x95\x9D" },
 
-	{ -1,		Common::UNK_LANG,	Common::kCodePageInvalid,	NULL }
+	{ kMacFontNonStandard,		Common::UNK_LANG,	Common::kCodePageInvalid,	NULL }
 };
 
 struct AliasProto {
@@ -79,32 +80,34 @@ struct AliasProto {
 
 static const AliasProto defaultAliases[] = {
 	// English names for Japanese fonts
-	{ 16436,	16436,	"OsakaMono" },
+	{ kMacFontOsakaMono,		kMacFontOsakaMono,	"OsakaMono" },
 
 	// Missing Japanese fonts
 	// These technically should be separate fonts, not just aliases for Osaka.
 	// However, we don't have a free source for these right now.
-	{ 16396,	16384,	"\x96\x7B\x96\xBE\x92\xA9\x81\x7C\x82\x6C" }, // Book Mincho - M
-	{ 16433,	16436,	"\x93\x99\x95\x9D\x83\x53\x83\x56\x83\x62\x83\x4E" }, // Mono Gothic
-	{ 16435,	16436,	"\x93\x99\x95\x9D\x96\xBE\x92\xA9" }, // Mono Ming
-	{ 16640,	16384,	"\x92\x86\x83\x53\x83\x56\x83\x62\x83\x4E\x91\xCC" }, // Medium Gothic
-	{ 16641,	16384,	"\x8D\xD7\x96\xBE\x92\xA9\x91\xCC" }, // Ming
-	{ 16700,	16384,	"\x95\xBD\x90\xAC\x96\xBE\x92\xA9" }, // Heisei Mincho
-	{ 16701,	16384,	"\x95\xBD\x90\xAC\x8A\x70\x83\x53\x83\x56\x83\x62\x83\x4E" }, // Heisei Kaku Gothic
+	{ kMacFontBookMinchoM,		kMacFontOsaka,		"\x96\x7B\x96\xBE\x92\xA9\x81\x7C\x82\x6C" }, // Book Mincho - M
+	{ kMacFontMonoGothic,		kMacFontOsakaMono,	"\x93\x99\x95\x9D\x83\x53\x83\x56\x83\x62\x83\x4E" }, // Mono Gothic
+	{ kMacFontMonoMing,		kMacFontOsakaMono,	"\x93\x99\x95\x9D\x96\xBE\x92\xA9" }, // Mono Ming
+	{ kMacFontMediumGothic,		kMacFontOsaka,		"\x92\x86\x83\x53\x83\x56\x83\x62\x83\x4E\x91\xCC" }, // Medium Gothic
+	{ kMacFontMing,			kMacFontOsaka,		"\x8D\xD7\x96\xBE\x92\xA9\x91\xCC" }, // Ming
+	{ kMacFontHeiseiMincho,		kMacFontOsaka,		"\x95\xBD\x90\xAC\x96\xBE\x92\xA9" }, // Heisei Mincho
+	{ kMacFontHeiseiKakuGothic,	kMacFontOsaka,		"\x95\xBD\x90\xAC\x8A\x70\x83\x53\x83\x56\x83\x62\x83\x4E" }, // Heisei Kaku Gothic
 
-	{ -1,		-1,		NULL }
+	{ kMacFontNonStandard,		kMacFontNonStandard,	NULL }
 };
 
 static const AliasProto latinModeAliases[] = {
-	{ 0,		16383,	"System" }, // Chicago
-	{ 1,		3,		"Application" }, // Geneva
-	{ -1,		-1,		NULL }
+	{ kMacFontSystem,		kMacFontChicago,	"System" },
+	{ kMacFontApplication,		kMacFontGeneva,		"Application" },
+
+	{ kMacFontNonStandard,		kMacFontNonStandard,	NULL }
 };
 
 static const AliasProto japaneseModeAliases[] = {
-	{ 0,		16384,	"System" }, // Osaka
-	{ 1,		16384,	"Application" }, // Osaka
-	{ -1,		-1,		NULL }
+	{ kMacFontSystem,		kMacFontOsaka,		"System" },
+	{ kMacFontApplication,		kMacFontOsaka,		"Application" },
+
+	{ kMacFontNonStandard,		kMacFontNonStandard,	NULL }
 };
 
 static const char *const fontStyleSuffixes[] = {
@@ -516,12 +519,12 @@ const Font *MacFontManager::getFont(MacFont *macFont) {
 		if (!font) {
 			debugC(1, kDebugLevelMacGUI, "Cannot load font '%s'", macFont->getName().c_str());
 
-			font = FontMan.getFontByName(MacFont(kMacFontChicago, 12).getName());
+			font = FontMan.getFontByName(MacFont(kMacFontSystem, 12).getName());
 		}
 	}
 
 #ifdef USE_FREETYPE2
-	if (!font) {
+	if (!font && !(_mode & MacGUIConstants::kWMModeForceMacFonts)) {
 		if (_mode & kWMModeUnicode) {
 			if (macFont->getSize() <= 0) {
 				debugC(1, kDebugLevelMacGUI, "MacFontManager::getFont() - Font size <= 0!");
@@ -534,11 +537,11 @@ const Font *MacFontManager::getFont(MacFont *macFont) {
 				int newId = macFont->getId();
 				int newSlant = macFont->getSlant();
 				int familyId = getFamilyId(newId, newSlant);
-				if (_fontInfo.contains(familyId)) {
+				if (_fontInfo.contains(familyId) && !(_mode & kWMModeForceMacFontsInWin95)) {
 					font = Graphics::loadTTFFontFromArchive(_fontInfo[familyId]->name, macFont->getSize(), Graphics::kTTFSizeModeCharacter, 0, 0, Graphics::kTTFRenderModeMonochrome);
 					_uniFonts[macFont->getSize()] = font;
 				} else {
-					font = Graphics::loadTTFFontFromArchive("FreeSans.ttf", macFont->getSize(), Graphics::kTTFSizeModeCharacter, 0, 0, Graphics::kTTFRenderModeMonochrome);
+					font = Graphics::loadTTFFontFromArchive("LiberationSans-Regular.ttf", macFont->getSize(), Graphics::kTTFSizeModeCharacter, 0, 0, Graphics::kTTFRenderModeMonochrome);
 					_uniFonts[macFont->getSize()] = font;
 				}
 			}
@@ -615,28 +618,64 @@ int MacFontManager::parseFontSlant(Common::String slant) {
 }
 
 int MacFontManager::parseSlantFromName(const Common::String &name) {
-	int slantVal = 0;
+	int slantVal = kMacFontRegular; // 0
 
-	if (name.contains(" Bold") || name.equalsIgnoreCase("Bold"))
-		slantVal |= kMacFontBold;
-	if (name.contains(" Italic") || name.equalsIgnoreCase("Italic"))
-		slantVal |= kMacFontItalic;
-	if (name.contains(" Regular") || name.equalsIgnoreCase("Regular"))
-		slantVal |= kMacFontRegular;
-	if (name.contains(" Underline") || name.equalsIgnoreCase("Underline"))
-		slantVal |= kMacFontUnderline;
-	if (name.contains(" Shadow") || name.equalsIgnoreCase("Shadow"))
-		slantVal |= kMacFontShadow;
-	if (name.contains(" Outline") || name.equalsIgnoreCase("Outline"))
-		slantVal |= kMacFontOutline;
-	if (name.contains(" Condense") || name.equalsIgnoreCase("Condense"))
-		slantVal |= kMacFontCondense;
-	if (name.contains(" Extend") || name.equalsIgnoreCase("Extend"))
-		slantVal |= kMacFontExtend;
-	if (name.contains(" Plain") || name.equalsIgnoreCase("Plain"))
-		slantVal = kMacFontRegular;
-
+	Common::StringArray tokens = Common::StringTokenizer(name, " ,").split();
+	while (tokens.size()) {
+		Common::String subName = tokens.back();
+		tokens.pop_back();
+		if (subName.equalsIgnoreCase("bold"))
+			slantVal |= kMacFontBold;
+		if (subName.equalsIgnoreCase("italic"))
+			slantVal |= kMacFontItalic;
+		if (subName.equalsIgnoreCase("underline"))
+			slantVal |= kMacFontUnderline;
+		if (subName.equalsIgnoreCase("shadow"))
+			slantVal |= kMacFontShadow;
+		if (subName.equalsIgnoreCase("outline"))
+			slantVal |= kMacFontOutline;
+		if (subName.equalsIgnoreCase("condense"))
+			slantVal |= kMacFontCondense;
+		if (subName.equalsIgnoreCase("extend"))
+			slantVal |= kMacFontExtend;
+		// If plain is specified at any point, zero out the flags
+		if (subName.equalsIgnoreCase("plain"))
+			slantVal = kMacFontRegular;
+	}
 	return slantVal;
+}
+
+Common::String MacFontManager::getNameFromSlant(int slantVal) {
+
+	Common::StringArray tokens;
+	if (slantVal == kMacFontRegular)
+		return Common::String("plain");
+
+	if (slantVal & kMacFontBold)
+		tokens.push_back("bold");
+	if (slantVal & kMacFontItalic)
+		tokens.push_back("italic");
+	if (slantVal & kMacFontUnderline)
+		tokens.push_back("underline");
+	if (slantVal & kMacFontShadow)
+		tokens.push_back("shadow");
+	if (slantVal & kMacFontOutline)
+		tokens.push_back("outline");
+	if (slantVal & kMacFontCondense)
+		tokens.push_back("condense");
+	if (slantVal & kMacFontOutline)
+		tokens.push_back("extend");
+
+	if (tokens.begin() == tokens.end())
+		return *tokens.begin();
+
+	Common::String result = *tokens.begin();
+	for (auto it = tokens.begin() + 1; it != tokens.end(); it++) {
+		result += ",";
+		result += *it;
+	}
+
+	return result;
 }
 
 int MacFontManager::registerFontName(Common::String name, int preferredId) {
@@ -806,11 +845,13 @@ void MacFontManager::generateFontSubstitute(MacFont &macFont) {
 	Common::String name;
 
 #ifdef USE_FREETYPE2
-	// Check if we have TTF data for this font.
-	name = getFontName(macFont.getId(), 0, macFont.getSlant());
-	if (_ttfData.contains(name)) {
-		generateTTFFont(macFont, _ttfData[name]);
-		return;
+	if (!(_mode & MacGUIConstants::kWMModeForceMacFonts)) {
+		// Check if we have TTF data for this font.
+		name = getFontName(macFont.getId(), 0, macFont.getSlant());
+		if (_ttfData.contains(name)) {
+			generateTTFFont(macFont, _ttfData[name]);
+			return;
+		}
 	}
 #endif
 

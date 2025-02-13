@@ -26,7 +26,7 @@
 
 namespace M4 {
 
-Console::Console() : GUI::Debugger() {
+Console::Console() : ::GUI::Debugger() {
 	registerCmd("teleport",  WRAP_METHOD(Console, cmdTeleport));
 	registerCmd("item",      WRAP_METHOD(Console, cmdItem));
 	registerCmd("hyperwalk", WRAP_METHOD(Console, cmdHyperwalk));
@@ -34,6 +34,8 @@ Console::Console() : GUI::Debugger() {
 	registerCmd("trigger",   WRAP_METHOD(Console, cmdTrigger));
 	registerCmd("cels",      WRAP_METHOD(Console, cmdCels));
 	registerCmd("cel",       WRAP_METHOD(Console, cmdCel));
+	registerCmd("interface", WRAP_METHOD(Console, cmdInterface));
+	registerCmd("music",     WRAP_METHOD(Console, cmdMusic));
 }
 
 bool Console::cmdTeleport(int argc, const char **argv) {
@@ -127,6 +129,33 @@ bool Console::cmdCel(int argc, const char **argv) {
 	}
 
 	return true;
+}
+
+bool Console::cmdInterface(int argc, const char **argv) {
+	if (argc < 2) {
+		debugPrintf("interface ['show', 'hide']\n");
+		return true;
+	} else {
+		Common::String param(argv[1]);
+
+		if (param == "hide" || param == "off" || param == "false")
+			interface_hide();
+		else
+			interface_show();
+
+		return false;
+	}
+}
+
+bool Console::cmdMusic(int argc, const char **argv) {
+	if (argc != 2) {
+		debugPrintf("music <name>\n");
+		midi_play("ripthem1", 255, 0, -1, 999);
+		return true;
+	} else {
+		midi_play(argv[1], 255, 0, -1, 999);
+		return false;
+	}
 }
 
 } // End of namespace M4

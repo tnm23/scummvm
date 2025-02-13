@@ -182,6 +182,10 @@ void ScummEngine::readRoomsOffsets() {
 	}
 }
 
+ScummFile *ScummEngine::instantiateScummFile(bool indexPAKFiles) {
+	return !(_game.features & GF_DOUBLEFINE_PAK) ? new ScummFile(this) : new ScummPAKFile(this, indexPAKFiles);
+}
+
 bool ScummEngine::openFile(BaseScummFile &file, const Common::Path &filename, bool resourceFile) {
 	bool result = false;
 
@@ -1200,7 +1204,7 @@ void ResourceManager::resourceStats() {
 		}
 	}
 
-	debug(1, "Total allocated size=%d, locked=%d(%d)", _allocatedSize, lockedSize, lockedNum);
+	debug("Total allocated size=%d, locked=%d(%d)", _allocatedSize, lockedSize, lockedNum);
 }
 
 void ScummEngine_v5::readMAXS(int blockSize) {

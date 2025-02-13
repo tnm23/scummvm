@@ -42,6 +42,7 @@
 #include "agi/font.h"
 #include "agi/graphics.h"
 #include "agi/inv.h"
+#include "agi/loader.h"
 #include "agi/sprite.h"
 #include "agi/text.h"
 #include "agi/keyboard.h"
@@ -168,6 +169,13 @@ int AgiEngine::agiInit() {
 
 	applyVolumeToMixer();
 
+	// Error on Game Adaptation Language, because it is not implemented yet.
+	// This allows testing the GAL components that have been developed, such
+	// as the resource loader, with our debug console.
+	if (getGameType() == GType_GAL) {
+		error("Game Adaptation Language not implemented yet");
+	}
+
 	return ec;
 }
 
@@ -246,7 +254,8 @@ int AgiEngine::loadResource(int16 resourceType, int16 resourceNr) {
 			data = _loader->loadVolumeResource(&_game.dirSound[resourceNr]);
 
 			// "data" is freed by objects created by createFromRawResource on success
-			_game.sounds[resourceNr] = AgiSound::createFromRawResource(data, _game.dirSound[resourceNr].len, resourceNr, _soundemu);
+			const bool isAgiV1 = (getVersion() <= 0x2001);
+			_game.sounds[resourceNr] = AgiSound::createFromRawResource(data, _game.dirSound[resourceNr].len, resourceNr, _soundemu, isAgiV1);
 			if (_game.sounds[resourceNr] != nullptr) {
 				_game.dirSound[resourceNr].flags |= RES_LOADED;
 			} else {
@@ -304,7 +313,7 @@ void AgiEngine::unloadResource(int16 resourceType, int16 resourceNr) {
 		unloadLogic(resourceNr);
 		break;
 	case RESOURCETYPE_PICTURE:
-		_picture->unloadPicture(resourceNr);
+		unloadPicture(resourceNr);
 		break;
 	case RESOURCETYPE_VIEW:
 		unloadView(resourceNr);
@@ -314,6 +323,14 @@ void AgiEngine::unloadResource(int16 resourceType, int16 resourceNr) {
 		break;
 	default:
 		break;
+	}
+}
+
+void AgiEngine::unloadPicture(int16 picNr) {
+	if (_game.dirPic[picNr].flags & RES_LOADED) {
+		free(_game.pictures[picNr].rdata);
+		_game.pictures[picNr].rdata = nullptr;
+		_game.dirPic[picNr].flags &= ~RES_LOADED;
 	}
 }
 
@@ -370,31 +387,15 @@ void AgiBase::initRenderMode() {
 	// If render mode is explicitly set, force rendermode
 	switch (configRenderMode) {
 	case Common::kRenderCGA:
-		_renderMode = Common::kRenderCGA;
-		break;
 	case Common::kRenderEGA:
-		_renderMode = Common::kRenderEGA;
-		break;
 	case Common::kRenderVGA:
-		_renderMode = Common::kRenderVGA;
-		break;
 	case Common::kRenderHercG:
-		_renderMode = Common::kRenderHercG;
-		break;
 	case Common::kRenderHercA:
-		_renderMode = Common::kRenderHercA;
-		break;
 	case Common::kRenderAmiga:
-		_renderMode = Common::kRenderAmiga;
-		break;
 	case Common::kRenderApple2GS:
-		_renderMode = Common::kRenderApple2GS;
-		break;
 	case Common::kRenderAtariST:
-		_renderMode = Common::kRenderAtariST;
-		break;
 	case Common::kRenderMacintosh:
-		_renderMode = Common::kRenderMacintosh;
+		_renderMode = configRenderMode;
 		break;
 	default:
 		break;
@@ -416,14 +417,10 @@ AgiEngine::AgiEngine(OSystem *syst, const AGIGameDescription *gameDesc) : AgiBas
 
 	memset(&_debug, 0, sizeof(struct AgiDebug));
 
-	_game.mouseEnabled = true;
-	_game.mouseHidden = false;
-	// don't check for Amiga, Amiga doesn't allow disabling mouse support. It's mandatory.
-	if (!ConfMan.getBool("mousesupport")) {
-		// we effectively disable the mouse for games, that explicitly do not want mouse support to be enabled
-		_game.mouseEnabled = false;
-		_game.mouseHidden = true;
-	}
+	_game.mouseEnabled = ConfMan.getBool("mousesupport");
+	_game.mouseHidden = !_game.mouseEnabled;
+
+	_game.predictiveDlgOnMouseClick = ConfMan.getBool("predictivedlgonmouseclick");
 
 	_game._vm = this;
 
@@ -531,7 +528,13 @@ void AgiEngine::initialize() {
 
 	_text->charAttrib_Set(15, 0);
 
-	if (getPlatform() == Common::kPlatformApple2) {
+	if (getGameType() == GType_GAL) {
+		if (getPlatform() == Common::kPlatformApple2) {
+			_loader = new GalLoader_A2(this);
+		} else {
+			_loader = new GalLoader(this);
+		}
+	} else if (getPlatform() == Common::kPlatformApple2) {
 		_loader = new AgiLoader_A2(this);
 	} else if (getVersion() <= 0x2001) {
 		_loader = new AgiLoader_v1(this);
@@ -555,7 +558,7 @@ void AgiEngine::redrawScreen() {
 	_gfx->setPalette(true); // set graphics mode palette
 	_text->charAttrib_Set(_text->_textAttrib.foreground, _text->_textAttrib.background);
 	_gfx->clearDisplay(0);
-	_picture->showPic();
+	_picture->showPicture();
 	_text->statusDraw();
 	_text->promptRedraw();
 }

@@ -132,7 +132,7 @@ ScriptContext *LingoCompiler::compileLingo(const Common::U32String &code, LingoA
 	_assemblyArchive = archive;
 	_assemblyAST = nullptr;
 	_assemblyId = id.member;
-	ScriptContext *mainContext = _assemblyContext = new ScriptContext(scriptName, type, _assemblyId);
+	ScriptContext *mainContext = _assemblyContext = new ScriptContext(scriptName, type, _assemblyId, id.castLib);
 	_currentAssembly = new ScriptData;
 
 	_methodVars = new VarTypeHash;
@@ -1501,7 +1501,7 @@ bool LingoCompiler::visitTheNumberOfNode(TheNumberOfNode *node) {
 	case kNumberOfCastlibs:
 		codeInt(0); // Put dummy id
 		code1(LC::c_theentitypush);
-		codeInt(kTheCastlibs);
+		codeInt(kTheCastLibs);
 		codeInt(kTheNumber);
 		break;
 	case kNumberOfChars:

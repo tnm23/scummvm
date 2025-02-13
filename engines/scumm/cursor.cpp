@@ -274,17 +274,26 @@ void ScummEngine_v6::setCursorTransparency(int a) {
 
 void ScummEngine::updateCursor() {
 	int transColor = (_game.heversion >= 80) ? 5 : 255;
+	byte *cursor = _grabbedCursor;
+	int width = _cursor.width;
+	int height = _cursor.height;
+	int hotspotX = _cursor.hotspotX;
+	int hotspotY = _cursor.hotspotY;
+
+	if (_macScreen && _game.version == 6 && _game.heversion == 0)
+		mac_scaleCursor(cursor, hotspotX, hotspotY, width, height);
+
 #ifdef USE_RGB_COLOR
 	Graphics::PixelFormat format = _system->getScreenFormat();
-	CursorMan.replaceCursor(_grabbedCursor, _cursor.width, _cursor.height,
-							_cursor.hotspotX, _cursor.hotspotY,
-							(_game.platform == Common::kPlatformNES ? _grabbedCursor[63] : transColor),
+	CursorMan.replaceCursor(cursor, width, height,
+							hotspotX, hotspotY,
+							(_game.platform == Common::kPlatformNES ? cursor[63] : transColor),
 							(_game.heversion == 70 ? true : false),
 							&format);
 #else
-	CursorMan.replaceCursor(_grabbedCursor, _cursor.width, _cursor.height,
-							_cursor.hotspotX, _cursor.hotspotY,
-							(_game.platform == Common::kPlatformNES ? _grabbedCursor[63] : transColor),
+	CursorMan.replaceCursor(cursor, width, height,
+							hotspotX, hotspotY,
+							(_game.platform == Common::kPlatformNES ? cursor[63] : transColor),
 							(_game.heversion == 70 ? true : false));
 #endif
 }
@@ -407,16 +416,25 @@ void ScummEngine_v7::updateCursor() {
 		transColor = isSmushActive() ? 0x01 : 0xFF;
 	}
 
+	byte *cursor = _grabbedCursor;
+	int width = _cursor.width;
+	int height = _cursor.height;
+	int hotspotX = _cursor.hotspotX;
+	int hotspotY = _cursor.hotspotY;
+
+	if (_macScreen)
+		mac_scaleCursor(cursor, hotspotX, hotspotY, width, height);
+
 #ifdef USE_RGB_COLOR
 	Graphics::PixelFormat format = _system->getScreenFormat();
-	CursorMan.replaceCursor(_grabbedCursor, _cursor.width, _cursor.height,
-							_cursor.hotspotX, _cursor.hotspotY,
+	CursorMan.replaceCursor(cursor, width, height,
+							hotspotX, hotspotY,
 							transColor,
 							false,
 							&format);
 #else
-	CursorMan.replaceCursor(_grabbedCursor, _cursor.width, _cursor.height,
-							_cursor.hotspotX, _cursor.hotspotY,
+	CursorMan.replaceCursor(cursor, width, height,
+							hotspotX, hotspotY,
 							transColor,
 							false);
 #endif
@@ -869,6 +887,15 @@ void ScummEngine_v2::setBuiltinCursor(int idx) {
 			*(hotspot - _cursor.width * (3 + i)) = color;
 			*(hotspot + _cursor.width * (3 + i)) = color;
 		}
+	} else if (_macGui) {
+		int width, height, hotspotX, hotspotY, animate;
+
+		_macGui->setupCursor(width, height, hotspotX, hotspotY, animate);
+
+		_cursor.width = width;
+		_cursor.height = height;
+		_cursor.hotspotX = hotspotX;
+		_cursor.hotspotY = hotspotY;
 	} else {
 		_cursor.width = 23;
 		_cursor.height = 21;
@@ -922,6 +949,11 @@ void ScummEngine_v2::setBuiltinCursor(int idx) {
 }
 
 void ScummEngine_v2::setSnailCursor() {
+	// When running Maniac Mansion as a Macintosh game, there is no snail
+	// cursor. Only the regular arrow cursor.
+	if (_macGui)
+		return;
+
 	byte color;
 	if (_game.platform == Common::kPlatformC64 || _game.platform == Common::kPlatformApple2GS)
 		color = default_v0_cursor_colors[1];

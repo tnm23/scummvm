@@ -31,6 +31,7 @@
 #include "freescape/freescape.h"
 #include "freescape/language/8bitDetokeniser.h"
 #include "freescape/objects/sensor.h"
+#include "freescape/sweepAABB.h"
 
 namespace Freescape {
 
@@ -44,8 +45,13 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 		_renderMode = Common::parseRenderMode(ConfMan.get("render_mode"));
 
 	_binaryBits = 0;
-	_screenW = 320;
-	_screenH = 200;
+	if (_renderMode == Common::kRenderHercG) {
+		_screenW = 720;
+		_screenH = 348;
+	} else {
+		_screenW = 320;
+		_screenH = 200;
+	}
 
 	if (isAmiga()) {
 		_renderMode = Common::kRenderAmiga;
@@ -139,8 +145,6 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 	_lastFrame = 0;
 	_nearClipPlane = 2;
 	_farClipPlane = 8192 + 1802; // Added some extra distance to avoid flickering
-	_yminValue = -0.625;
-	_ymaxValue = 0.625;
 
 	// These depends on the specific game
 	_playerHeight = 0;
@@ -170,7 +174,6 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 	_viewArea = _fullscreenViewArea;
 	_rnd = new Common::RandomSource("freescape");
 	_gfx = nullptr;
-	_rawCGAPaletteByArea = nullptr;
 	_speaker = nullptr;
 	_savedScreen = nullptr;
 
@@ -206,7 +209,6 @@ FreescapeEngine::FreescapeEngine(OSystem *syst, const ADGameDescription *gd)
 	ConfMan.setBool("gamepad_controller_minimal_layout", true, gameDomain);
 	ConfMan.setInt("gamepad_controller_directional_input", 1 /* kDirectionalInputDpad */, gameDomain);
 #endif
-
 	g_freescape = this;
 }
 
@@ -403,7 +405,7 @@ void FreescapeEngine::drawBackground() {
 
 	if (isCastle() && _background) {
 		if (!_skyTexture)
-			_skyTexture = _gfx->createTexture(_background->surfacePtr());
+			_skyTexture = _gfx->createTexture(_background->surfacePtr(), true);
 		_gfx->drawSkybox(_skyTexture, _position);
 	}
 }
@@ -413,7 +415,8 @@ void FreescapeEngine::drawFrame() {
 	if (_currentArea->isOutside())
 		farClipPlane *= 100;
 
-	_gfx->updateProjectionMatrix(90.0, _yminValue, _ymaxValue, _nearClipPlane, farClipPlane);
+	float aspectRatio = isCastle() ? 1.6 : 2.18;
+	_gfx->updateProjectionMatrix(75.0, aspectRatio, _nearClipPlane, farClipPlane);
 	_gfx->positionCamera(_position, _position + _cameraFront);
 
 	if (_underFireFrames > 0) {
@@ -479,12 +482,30 @@ void FreescapeEngine::releasedKey(const int keycode) {}
 void FreescapeEngine::resetInput() {
 	_shootMode = false;
 	centerCrossair();
-	g_system->warpMouse(_crossairPosition.x, _crossairPosition.y);
+	warpMouseToCrossair();
 	_eventManager->purgeMouseEvents();
 	_eventManager->purgeKeyboardEvents();
 	rotate(0, 0);
 }
 
+Common::Point FreescapeEngine::crossairPosToMousePos(const Common::Point crossairPos) {
+	Common::Point mousePos;
+	mousePos.x = g_system->getWidth() * crossairPos.x / _screenW;
+	mousePos.y = g_system->getHeight() * crossairPos.y / _screenH;
+	return mousePos;
+}
+
+Common::Point FreescapeEngine::mousePosToCrossairPos(const Common::Point mousePos) {
+	Common::Point crossairPos;
+	crossairPos.x = _screenW * mousePos.x / g_system->getWidth();
+	crossairPos.y = _screenH * mousePos.y / g_system->getHeight();
+	return crossairPos;
+}
+
+void FreescapeEngine::warpMouseToCrossair() {
+	const Common::Point mousePos = crossairPosToMousePos(_crossairPosition);
+	g_system->warpMouse(mousePos.x, mousePos.y);
+}
 
 void FreescapeEngine::processInput() {
 	float currentFrame = g_system->getMillis();
@@ -516,7 +537,7 @@ void FreescapeEngine::processInput() {
 
 		switch (event.type) {
 		case Common::EVENT_CUSTOM_ENGINE_ACTION_START:
-			if (_hasFallen)
+			if (_hasFallen || _playerWasCrushed)
 				break;
 			switch (event.customType) {
 			case kActionMoveUp:
@@ -563,7 +584,7 @@ void FreescapeEngine::processInput() {
 					g_system->lockMouse(true);
 				} else {
 					g_system->lockMouse(false);
-					g_system->warpMouse(_crossairPosition.x, _crossairPosition.y);
+					warpMouseToCrossair();
 					_eventManager->purgeMouseEvents();
 					_eventManager->purgeKeyboardEvents();
 				}
@@ -577,14 +598,14 @@ void FreescapeEngine::processInput() {
 			}
 			break;
 		case Common::EVENT_KEYDOWN:
-			if (_hasFallen)
+			if (_hasFallen || _playerWasCrushed)
 				break;
 
 			pressedKey(event.kbd.keycode);
 			break;
 
 		case Common::EVENT_KEYUP:
-			if (_hasFallen)
+			if (_hasFallen || _playerWasCrushed)
 				break;
 
 			releasedKey(event.kbd.keycode);
@@ -601,7 +622,7 @@ void FreescapeEngine::processInput() {
 			break;
 
 		case Common::EVENT_MOUSEMOVE:
-			if (_hasFallen)
+			if (_hasFallen || _playerWasCrushed)
 				break;
 			mousePos = event.mouse;
 
@@ -609,27 +630,22 @@ void FreescapeEngine::processInput() {
 				g_system->warpMouse(mousePos.x, mousePos.y);
 
 			if (_shootMode) {
-				_crossairPosition.x = _screenW * mousePos.x / g_system->getWidth();
-				_crossairPosition.y = _screenH * mousePos.y / g_system->getHeight();
-				break;
+				_crossairPosition = mousePosToCrossairPos(mousePos);
 			} else {
 				// Mouse pointer is locked into the the middle of the screen
 				// since we only need the relative movements. This will not affect any touchscreen device
 				// so on-screen controls are still accesible
-				mousePos.x = g_system->getWidth() * ( _viewArea.left + _viewArea.width() / 2) / _screenW;
-				mousePos.y = g_system->getHeight() * (_viewArea.top + _viewArea.height() / 2) / _screenW;
+				warpMouseToCrossair();
 				if (_invertY)
 					event.relMouse.y = -event.relMouse.y;
 
-				g_system->warpMouse(mousePos.x, mousePos.y);
 				_eventManager->purgeMouseEvents();
-			}
-
-			rotate(event.relMouse.x * _mouseSensitivity, event.relMouse.y * _mouseSensitivity);
+				rotate(event.relMouse.x * _mouseSensitivity, event.relMouse.y * _mouseSensitivity);
+			}			
 			break;
 
 		case Common::EVENT_LBUTTONDOWN:
-			if (_hasFallen)
+			if (_hasFallen || _playerWasCrushed)
 				break;
 			mousePos = event.mouse;
 			{
@@ -646,7 +662,7 @@ void FreescapeEngine::processInput() {
 			break;
 
 		case Common::EVENT_RBUTTONDOWN:
-			if (_hasFallen || !isCastle())
+			if (_hasFallen || _playerWasCrushed || !isCastle())
 				break;
 			activate();
 			break;
@@ -658,9 +674,24 @@ void FreescapeEngine::processInput() {
 }
 
 Common::Point FreescapeEngine::getNormalizedPosition(Common::Point position) {
+	// Retrieve the screen and viewport dimensions
 	Common::Point resolution(g_system->getWidth(), g_system->getHeight());
-	position.x = _screenW * position.x / resolution.x;
-	position.y = _screenH * position.y / resolution.y;
+
+	int32 viewportWidth = MIN<int32>(resolution.x, resolution.y * float(4) / 3);
+	int32 viewportHeight = MIN<int32>(resolution.y, resolution.x * float(3) / 4);
+
+	// Calculate pillarbox offset
+	int32 offsetX = (resolution.x - viewportWidth) / 2;
+	int32 offsetY = (resolution.y - viewportHeight) / 2;
+
+	// Adjust mouse position by removing the offset
+	position.x -= offsetX;
+	position.y -= offsetY;
+
+	// Scale position to match the 320x200 internal resolution
+	position.x = position.x * 320 / viewportWidth;
+	position.y = position.y * 200 / viewportHeight;
+
 	return position;
 }
 
@@ -679,8 +710,8 @@ Common::Error FreescapeEngine::run() {
 	_vsyncEnabled = g_system->getFeatureState(OSystem::kFeatureVSync);
 	_frameLimiter = new Graphics::FrameLimiter(g_system, ConfMan.getInt("engine_speed"));
 	// Initialize graphics
-	_screenW = g_system->getWidth();
-	_screenH = g_system->getHeight();
+	//_screenW = g_system->getWidth();
+	//_screenH = g_system->getHeight();
 	_gfx = createRenderer(_screenW, _screenH, _renderMode, ConfMan.getBool("authentic_graphics"));
 	_speaker = new SizedPCSpeaker();
 	_speaker->setVolume(50);
@@ -741,6 +772,7 @@ Common::Error FreescapeEngine::run() {
 			generateDemoInput();
 
 		checkSensors();
+		checkIfPlayerWasCrushed();
 		drawFrame();
 
 		if (_shootingFrames == 0) {
@@ -751,6 +783,7 @@ Common::Error FreescapeEngine::run() {
 				executeObjectConditions(_delayedShootObject, true, rockTravel, false);
 				executeLocalGlobalConditions(true, false, false); // Only execute "on shot" room/global conditions
 				_delayedShootObject = nullptr;
+				drawFrame(); // Redraw the frame, in case the script execution took too long
 			}
 		}
 
@@ -765,6 +798,8 @@ Common::Error FreescapeEngine::run() {
 	}
 
 	_eventManager->clearExitEvents();
+	g_system->showMouse(true);
+	g_system->lockMouse(false);
 	return Common::kNoError;
 }
 
@@ -872,6 +907,14 @@ bool FreescapeEngine::checkIfGameEnded() {
 	return false;
 }
 
+void FreescapeEngine::checkIfPlayerWasCrushed() {
+	Math::AABB boundingBox = createPlayerAABB(_position, _playerHeight);
+	if (!_playerWasCrushed && _currentArea->checkIfPlayerWasCrushed(boundingBox)) {
+		_avoidRenderingFrames = 60 * 3;
+		_playerWasCrushed = true;
+	}
+}
+
 void FreescapeEngine::setGameBit(int index) {
 	_gameStateBits |= (1 << (index - 1));
 }
@@ -917,6 +960,7 @@ void FreescapeEngine::initGameState() {
 
 	removeTimers();
 	startCountdown(_initialCountdown - 1);
+	clearTemporalMessages();
 	int seconds, minutes, hours;
 	getTimeFromCountdown(seconds, minutes, hours);
 	_lastMinute = minutes;
@@ -959,58 +1003,6 @@ bool FreescapeEngine::hasFeature(EngineFeature f) const {
 		   (f == kSupportsArbitraryResolutions && !softRenderer);
 }
 
-void FreescapeEngine::drawStringInSurface(const Common::String &str, int x, int y, uint32 fontColor, uint32 backColor, Graphics::Surface *surface, int offset) {
-	if (!_fontLoaded)
-		return;
-	Common::String ustr = str;
-	uint32 transparent = _gfx->_texturePixelFormat.ARGBToColor(0, 0, 0, 0);
-	ustr.toUppercase();
-
-	int sizeX = 8;
-	int sizeY = isCastle() ? 8 : 6;
-	int sep = isCastle() ? 9 : 8;
-	int additional = isCastle() || isEclipse() ? 0 : 1;
-
-	for (uint32 c = 0; c < ustr.size(); c++) {
-		assert(ustr[c] >= 32);
-		int position = sizeX * sizeY * (offset + ustr[c] - 32);
-		for (int j = 0; j < sizeY; j++) {
-			for (int i = 0; i < sizeX; i++) {
-				if (_font.get(position + additional + j * 8 + i) && fontColor != transparent)
-					surface->setPixel(x + 8 - i + sep * c, y + j, fontColor);
-				else if (backColor != transparent)
-					surface->setPixel(x + 8 - i + sep * c, y + j, backColor);
-			}
-		}
-	}
-}
-
-void FreescapeEngine::drawStringInSurface(const Common::String &str, int x, int y, uint32 primaryColor, uint32 secondaryColor, uint32 backColor, Graphics::Surface *surface, int offset) {
-	if (!_fontLoaded)
-		return;
-	Common::String ustr = str;
-	ustr.toUppercase();
-
-	int multiplier1 = isDriller() ? 33 : 16;
-	int multiplier2 = isDriller() ? 32 : 16;
-
-	for (uint32 c = 0; c < ustr.size(); c++) {
-		assert(ustr[c] >= 32);
-		int position = 8 * (multiplier1*(offset + ustr[c] - 32) + 1);
-		for (int j = 0; j < 8; j++) {
-			for (int i = 0; i < 8; i++) {
-				if (_font.get(position + j * multiplier2 + i + 8)) {
-					surface->setPixel(x + 8 - i + 8 * c, y + j, secondaryColor);
-				} else if (_font.get(position + j * multiplier2 + i)) {
-					surface->setPixel(x + 8 - i + 8 * c, y + j, primaryColor);
-				} else {
-					surface->setPixel(x + 8 - i + 8 * c, y + j, backColor);
-				}
-			}
-		}
-	}
-}
-
 Common::Error FreescapeEngine::loadGameStream(Common::SeekableReadStream *stream) {
 
 	uint16 areaID = stream->readUint16LE();
@@ -1041,6 +1033,7 @@ Common::Error FreescapeEngine::loadGameStream(Common::SeekableReadStream *stream
 	_flyMode = stream->readByte();
 	_noClipMode = false;
 	_playerHeightNumber = stream->readUint32LE();
+	_playerStepIndex = stream->readUint32LE();
 	_countdown = stream->readUint32LE();
 	_ticks = 0;
 	if (!_currentArea || _currentArea->getAreaID() != areaID)
@@ -1081,6 +1074,7 @@ Common::Error FreescapeEngine::saveGameStream(Common::WriteStream *stream, bool 
 
 	stream->writeByte(_flyMode);
 	stream->writeUint32LE(_playerHeightNumber);
+	stream->writeUint32LE(_playerStepIndex);
 	stream->writeUint32LE(_countdown);
 	return saveGameStreamExtended(stream, isAutosave);
 }

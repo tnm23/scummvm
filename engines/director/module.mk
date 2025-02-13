@@ -133,7 +133,6 @@ MODULE_OBJS = \
 	lingo/xlibs/panel.o \
 	lingo/xlibs/popupmenuxobj.o \
 	lingo/xlibs/porta.o \
-	lingo/xlibs/portaxcmd.o \
 	lingo/xlibs/prefpath.o \
 	lingo/xlibs/printomatic.o \
 	lingo/xlibs/processxobj.o \
@@ -148,6 +147,7 @@ MODULE_OBJS = \
 	lingo/xlibs/spacemgr.o \
 	lingo/xlibs/stagetc.o \
 	lingo/xlibs/syscolor.o \
+	lingo/xlibs/tengu.o \
 	lingo/xlibs/unittest.o \
 	lingo/xlibs/valkyrie.o \
 	lingo/xlibs/videodiscxobj.o \
@@ -164,10 +164,12 @@ MODULE_OBJS = \
 	lingo/xlibs/xwin.o \
 	lingo/xlibs/yasix.o \
 	lingo/xtras/directsound.o \
+	lingo/xtras/filextra.o \
 	lingo/xtras/keypoll.o \
 	lingo/xtras/qtvrxtra.o \
 	lingo/xtras/scrnutil.o \
-	lingo/xtras/timextra.o
+	lingo/xtras/timextra.o \
+	lingo/xtras/xsound.o
 
 
 ifdef USE_IMGUI
@@ -176,7 +178,6 @@ MODULE_OBJS += \
 	debugger/dt-cast.o \
 	debugger/dt-controlpanel.o \
 	debugger/dt-lists.o \
-	debugger/dt-logger.o \
 	debugger/dt-score.o \
 	debugger/dt-script-d2.o \
 	debugger/dt-script-d4.o \

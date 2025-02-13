@@ -359,7 +359,7 @@ Composer
    * - Alyssa Milburn
      -
 
-Crab
+CRAB
 ^^^^
 
 .. list-table::
@@ -401,6 +401,28 @@ Cryomni3D
    :widths: 35 65
 
    * - Philippe Valembois
+     -
+
+Darkseed
+^^^^^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Eric Fry
+     -
+
+DGDS
+^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Matthew Duggan
+     -
+   * - Filippos Karapetis
+     -
+   * - Vasco Alexandre da Silva Costa
      -
 
 Director
@@ -562,6 +584,17 @@ Gob
    * - Sven Hesse
      -
    * - Eugene Sandulenko
+     -
+
+Got
+^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Paul Gilbert
+     -
+   * - Arnaud Boutonné
      -
 
 Griffon
@@ -792,6 +825,8 @@ M4
 
    * - Paul Gilbert
      -
+   * - Arnaud Boutonné
+     -
 
 MacVenture
 ^^^^^^^^^^
@@ -824,6 +859,15 @@ MADS
    * - Paul Gilbert
      -
    * - Filippos Karapetis
+     -
+
+Media Station
+^^^^^^^^^^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Nathanael Gentry
      -
 
 MM (Xeen)
@@ -1004,6 +1048,17 @@ Private
    :widths: 35 65
 
    * - Gustavo Grieco
+     -
+
+QDEngine
+^^^^^^^^
+
+.. list-table::
+   :widths: 35 65
+
+   * - Eugene Sandulenko
+     -
+   * - Kunal Tiwari
      -
 
 Queen
@@ -1503,9 +1558,13 @@ Wintermute
 
    * - Gunnar Birke
      - Wintermute 3D
+   * - Paweł Kołodziejski
+     - Wintermute 3D
    * - Einar Johan T. Sømåen
      -
    * - Tobia Tesan
+     -
+   * - lolbot-iichan
      -
 
 Z-Vision

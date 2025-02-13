@@ -303,14 +303,16 @@ void FreescapeEngine::playSound(int index, bool sync) {
 		return;
 	}
 
+	if (_syncSound)
+		waitForSounds();
+
+	_syncSound = sync;
+
 	debugC(1, kFreescapeDebugMedia, "Playing sound %d with sync: %d", index, sync);
 	if (isAmiga() || isAtariST()) {
 		playSoundFx(index, sync);
-		_syncSound = sync;
 		return;
 	}
-	if (_syncSound)
-		waitForSounds();
 
 	if (isDOS()) {
 		soundSpeakerFx *speakerFxInfo = _soundsSpeakerFx[index];
@@ -323,12 +325,13 @@ void FreescapeEngine::playSound(int index, bool sync) {
 	} else if (isSpectrum() && !isDriller()) {
 		playSoundZX(_soundsSpeakerFxZX[index]);
 		return;
-	} else if (isCPC() && !isDriller()) {
-		debugC(1, kFreescapeDebugMedia, "Not implemented");
-		return;
 	}
 
-	switch (index) {
+	Common::Path filename;
+	filename = Common::String::format("%s-%d.wav", _targetName.c_str(), index);
+	debugC(1,  kFreescapeDebugMedia, "Playing sound %s", filename.toString().c_str());
+	playWav(filename);
+	/*switch (index) {
 	case 1:
 		playWav("fsDOS_laserFire.wav");
 		break;
@@ -390,13 +393,16 @@ void FreescapeEngine::playSound(int index, bool sync) {
 	default:
 		debugC(1, kFreescapeDebugMedia, "Unexpected sound %d", index);
 		break;
-	}
+	}*/
 	_syncSound = sync;
 }
 void FreescapeEngine::playWav(const Common::Path &filename) {
 
 	Common::SeekableReadStream *s = _dataBundle->createReadStreamForMember(filename);
-	assert(s);
+	if (!s) {
+		debugC(1, kFreescapeDebugMedia, "WARNING: Sound %s not found", filename.toString().c_str());
+		return;
+	}
 	Audio::AudioStream *stream = Audio::makeWAVStream(s, DisposeAfterUse::YES);
 	_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundFxHandle, stream);
 }
@@ -405,6 +411,7 @@ void FreescapeEngine::playMusic(const Common::Path &filename) {
 	Audio::SeekableAudioStream *stream = nullptr;
 	stream = Audio::SeekableAudioStream::openStreamFile(filename);
 	if (stream) {
+		_mixer->stopHandle(_musicHandle);
 		Audio::LoopingAudioStream *loop = new Audio::LoopingAudioStream(stream, 0);
 		_mixer->playStream(Audio::Mixer::kMusicSoundType, &_musicHandle, loop);
 		_mixer->setVolumeForSoundType(Audio::Mixer::kMusicSoundType, Audio::Mixer::kMaxChannelVolume / 10);
@@ -446,7 +453,7 @@ void FreescapeEngine::stopAllSounds() {
 
 void FreescapeEngine::waitForSounds() {
 	if (_usePrerecordedSounds || isAmiga() || isAtariST())
-		while (_mixer->isSoundIDActive(-1))
+		while (_mixer->isSoundHandleActive(_soundFxHandle))
 			g_system->delayMillis(10);
 	else {
 		while (!_speaker->endOfStream())
@@ -456,7 +463,7 @@ void FreescapeEngine::waitForSounds() {
 
 bool FreescapeEngine::isPlayingSound() {
 	if (_usePrerecordedSounds || isAmiga() || isAtariST())
-		return _mixer->isSoundIDActive(-1);
+		return _mixer->isSoundHandleActive(_soundFxHandle);
 
 	return (!_speaker->endOfStream());
 }
@@ -521,7 +528,7 @@ void FreescapeEngine::playSoundZX(Common::Array<soundUnitZX> *data) {
 	}
 
 	_mixer->stopHandle(_soundFxHandle);
-	_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundFxHandle, _speaker, -1, Audio::Mixer::kMaxChannelVolume, 0, DisposeAfterUse::NO);
+	_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundFxHandle, _speaker, -1, kFreescapeDefaultVolume, 0, DisposeAfterUse::NO);
 }
 
 void FreescapeEngine::playSoundDOS(soundSpeakerFx *speakerFxInfo, bool sync) {
@@ -537,7 +544,7 @@ void FreescapeEngine::playSoundDOS(soundSpeakerFx *speakerFxInfo, bool sync) {
 	}
 
 	_mixer->stopHandle(_soundFxHandle);
-	_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundFxHandle, _speaker, -1, Audio::Mixer::kMaxChannelVolume / 8, 0, DisposeAfterUse::NO);
+	_mixer->playStream(Audio::Mixer::kSFXSoundType, &_soundFxHandle, _speaker, -1, kFreescapeDefaultVolume / 2, 0, DisposeAfterUse::NO);
 }
 
 void FreescapeEngine::loadSoundsFx(Common::SeekableReadStream *file, int offset, int number) {

@@ -151,11 +151,11 @@ protected:
 		kDisplayDelay = 1500
 	};
 	Common::U32String _label;
-	const int _min, _max;
-	const uint16 _incKey, _decKey;
-	int _percentBarWidth;
-	int _value;
-	uint32 _timer;
+	const int _min = 0, _max = 0;
+	const uint16 _incKey = 0, _decKey = 0;
+	int _percentBarWidth = 0;
+	int _value = 0;
+	uint32 _timer = 0;
 };
 
 /**
@@ -239,11 +239,11 @@ protected:
 	void createEnhancementsWidget(GuiObject *boss, const Common::String &name);
 	GUI::ThemeEval &addEnhancementsLayout(GUI::ThemeEval &layouts) const;
 	GUI::CheckboxWidget *createOriginalGUICheckbox(GuiObject *boss, const Common::String &name);
+	GUI::CheckboxWidget *createGammaCorrectionCheckbox(GuiObject *boss, const Common::String &name);
 	GUI::CheckboxWidget *createCopyProtectionCheckbox(GuiObject *boss, const Common::String &name);
 	void updateAdjustmentSlider(GUI::SliderWidget *slider, GUI::StaticTextWidget *value);
 
 	Common::Array<GUI::CheckboxWidget *> _enhancementsCheckboxes;
-
 };
 
 /**
@@ -262,8 +262,8 @@ private:
 		kSmoothScrollCmd = 'SMSC'
 	};
 
-	GUI::CheckboxWidget *_smoothScrollCheckbox;
-	GUI::CheckboxWidget *_semiSmoothScrollCheckbox;
+	GUI::CheckboxWidget *_smoothScrollCheckbox = nullptr;
+	GUI::CheckboxWidget *_semiSmoothScrollCheckbox = nullptr;
 
 	void defineLayout(GUI::ThemeEval &layouts, const Common::String &layoutName, const Common::String &overlayedLayout) const override;
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
@@ -291,22 +291,22 @@ private:
 	void defineLayout(GUI::ThemeEval &layouts, const Common::String &layoutName, const Common::String &overlayedLayout) const override;
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
 
-	GUI::CheckboxWidget *_enableOriginalGUICheckbox;
-	GUI::CheckboxWidget *_enableCopyProtectionCheckbox;
+	GUI::CheckboxWidget *_enableOriginalGUICheckbox = nullptr;
+	GUI::CheckboxWidget *_enableCopyProtectionCheckbox = nullptr;
 
-	GUI::SliderWidget *_overtureTicksSlider;
-	GUI::StaticTextWidget *_overtureTicksValue;
+	GUI::SliderWidget *_overtureTicksSlider = nullptr;
+	GUI::StaticTextWidget *_overtureTicksValue = nullptr;
 
 	void updateOvertureTicksValue();
 };
 
 /**
-* Options widget for Mac Loom.
+* Options widget for various Macintosh games.
 */
-class LoomMonkeyMacGameOptionsWidget : public ScummOptionsContainerWidget {
+class MacGameOptionsWidget : public ScummOptionsContainerWidget {
 public:
-	LoomMonkeyMacGameOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain, int gameId);
-	~LoomMonkeyMacGameOptionsWidget() override {};
+	MacGameOptionsWidget(GuiObject *boss, const Common::String &name, const Common::String &domain, int gameId, const Common::String &extra);
+	~MacGameOptionsWidget() override {};
 
 	void load() override;
 	bool save() override;
@@ -318,11 +318,12 @@ private:
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
 	void updateQualitySlider();
 
-	GUI::CheckboxWidget *_enableOriginalGUICheckbox;
-	GUI::CheckboxWidget *_enableCopyProtectionCheckbox;
-	GUI::SliderWidget *_sndQualitySlider;
-	GUI::StaticTextWidget *_sndQualityValue;
-	int _quality;
+	GUI::CheckboxWidget *_enableOriginalGUICheckbox = nullptr;
+	GUI::CheckboxWidget *_enableGammaCorrectionCheckbox = nullptr;
+	GUI::CheckboxWidget *_enableCopyProtectionCheckbox = nullptr;
+	GUI::SliderWidget *_sndQualitySlider = nullptr;
+	GUI::StaticTextWidget *_sndQualityValue = nullptr;
+	int _quality = 0;
 };
 
 /**
@@ -344,10 +345,10 @@ private:
 	void defineLayout(GUI::ThemeEval &layouts, const Common::String &layoutName, const Common::String &overlayedLayout) const override;
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
 
-	GUI::CheckboxWidget *_enableOriginalGUICheckbox;
+	GUI::CheckboxWidget *_enableOriginalGUICheckbox = nullptr;
 
-	GUI::SliderWidget *_playbackAdjustmentSlider;
-	GUI::StaticTextWidget *_playbackAdjustmentValue;
+	GUI::SliderWidget *_playbackAdjustmentSlider = nullptr;
+	GUI::StaticTextWidget *_playbackAdjustmentValue = nullptr;
 
 	void updatePlaybackAdjustmentValue();
 };
@@ -372,12 +373,12 @@ private:
 	void defineLayout(GUI::ThemeEval &layouts, const Common::String &layoutName, const Common::String &overlayedLayout) const override;
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
 
-	GUI::CheckboxWidget *_enableOriginalGUICheckbox;
+	GUI::CheckboxWidget *_enableOriginalGUICheckbox = nullptr;
 
-	GUI::SliderWidget *_introAdjustmentSlider;
-	GUI::StaticTextWidget *_introAdjustmentValue;
-	GUI::SliderWidget *_outlookAdjustmentSlider;
-	GUI::StaticTextWidget *_outlookAdjustmentValue;
+	GUI::SliderWidget *_introAdjustmentSlider = nullptr;
+	GUI::StaticTextWidget *_introAdjustmentValue = nullptr;
+	GUI::SliderWidget *_outlookAdjustmentSlider = nullptr;
+	GUI::StaticTextWidget *_outlookAdjustmentValue = nullptr;
 
 	void updateIntroAdjustmentValue();
 	void updateOutlookAdjustmentValue();
@@ -408,24 +409,24 @@ private:
 	void defineLayout(GUI::ThemeEval &layouts, const Common::String &layoutName, const Common::String &overlayedLayout) const override;
 	void handleCommand(GUI::CommandSender *sender, uint32 cmd, uint32 data) override;
 
-	GUI::CheckboxWidget *_audioOverride;
+	GUI::CheckboxWidget *_audioOverride = nullptr;
 
-	GUI::CheckboxWidget *_enableSessionServer;
+	GUI::CheckboxWidget *_enableSessionServer = nullptr;
 
-	GUI::EditTextWidget *_sessionServerAddr;
-	GUI::ButtonWidget *_serverResetButton;
+	GUI::EditTextWidget *_sessionServerAddr = nullptr;
+	GUI::ButtonWidget *_serverResetButton = nullptr;
 
-	GUI::CheckboxWidget *_enableLANBroadcast;
+	GUI::CheckboxWidget *_enableLANBroadcast = nullptr;
 
-	GUI::CheckboxWidget *_generateRandomMaps;
+	GUI::CheckboxWidget *_generateRandomMaps = nullptr;
 
-	GUI::EditTextWidget *_lobbyServerAddr;
+	GUI::EditTextWidget *_lobbyServerAddr = nullptr;
 
 #ifdef USE_LIBCURL
-	GUI::CheckboxWidget *_enableCompetitiveMods;
+	GUI::CheckboxWidget *_enableCompetitiveMods = nullptr;
 #endif
 
-	GUI::StaticTextWidget *_networkVersion;
+	GUI::StaticTextWidget *_networkVersion = nullptr;
 };
 #endif
 

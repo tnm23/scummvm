@@ -165,7 +165,7 @@ void Room137::daemon() {
 	}
 
 	if (!digi_play_state(2) && _flag1 && imath_ranged_rand(1, 3000) == 235) {
-		// Ocassional actions. *VERY* occasional actions
+		// Occasional actions. *VERY* occasional actions
 		if (_flag2 && inv_object_in_scene("keys", 138)) {
 			digi_play("137_022", 2, 100);
 			_flag2 = false;
@@ -427,7 +427,7 @@ void Room137::daemon() {
 		break;
 
 	case 3:
-		ws_walk(276, 292, 0, -1, 4);
+		ws_walk(276, 292, nullptr, -1, 4);
 		break;
 
 	case kSOMEONE_TOOK_KEYS:
@@ -445,7 +445,7 @@ void Room137::daemon() {
 
 		if (_G(player_info).y > 308) {
 			_sherrifShould = 14;
-			ws_walk(307, 349, 0, -1, 2);
+			ws_walk(307, 349, nullptr, -1, 2);
 		}
 
 		kernel_trigger_dispatch_now(kCHANGE_SHERRIF_ANIMATION);
@@ -623,7 +623,7 @@ void Room137::daemon() {
 		case 3:
 			ws_demand_location(183, 216, 8);
 			_G(wilbur_should) = 4;
-			ws_walk(171, 236, 0, kCHANGE_WILBUR_ANIMATION, 5);
+			ws_walk(171, 236, nullptr, kCHANGE_WILBUR_ANIMATION, 5);
 			break;
 
 		case 4:

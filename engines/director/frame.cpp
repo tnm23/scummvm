@@ -304,7 +304,7 @@ void readSpriteDataD2(Common::SeekableReadStreamEndian &stream, Sprite &sprite, 
 				stream.readByte();
 			} else {
 				// Normalize D2 and D3 colors from -128 ... 127 to 0 ... 255.
-				sprite._foreColor = g_director->transformColor((128 + stream.readByte()) & 0xff);
+				sprite._foreColor = g_director->transformColor(stream.readByte() ^ 0x80);
 			}
 			break;
 		case 3:
@@ -312,7 +312,7 @@ void readSpriteDataD2(Common::SeekableReadStreamEndian &stream, Sprite &sprite, 
 				stream.readByte();
 			} else {
 				// Normalize D2 and D3 colors from -128 ... 127 to 0 ... 255.
-				sprite._backColor = g_director->transformColor((128 + stream.readByte()) & 0xff);
+				sprite._backColor = g_director->transformColor(stream.readByte() ^ 0x80);
 			}
 			break;
 		case 4:
@@ -506,8 +506,8 @@ void Frame::readMainChannelsD4(Common::MemoryReadStreamEndian &stream, uint16 of
 			break;
 		case 22:
 			// loop points for color cycling
-			_mainChannels.palette.firstColor = g_director->transformColor(stream.readByte() + 0x80); // 22
-			_mainChannels.palette.lastColor = g_director->transformColor(stream.readByte() + 0x80); // 23
+			_mainChannels.palette.firstColor = g_director->transformColor(stream.readByte() ^ 0x80); // 22
+			_mainChannels.palette.lastColor = g_director->transformColor(stream.readByte() ^ 0x80); // 23
 			break;
 		case 24:
 			_mainChannels.palette.flags = stream.readByte(); // 24
@@ -826,8 +826,8 @@ void Frame::readMainChannelsD5(Common::MemoryReadStreamEndian &stream, uint16 of
 			_mainChannels.palette.overTime = (_mainChannels.palette.flags & 0x04) != 0;
 			break;
 		case 30:
-			_mainChannels.palette.firstColor = g_director->transformColor(stream.readByte() + 0x80); // 30
-			_mainChannels.palette.lastColor = g_director->transformColor(stream.readByte() + 0x80); // 31
+			_mainChannels.palette.firstColor = g_director->transformColor(stream.readByte() ^ 0x80); // 30
+			_mainChannels.palette.lastColor = g_director->transformColor(stream.readByte() ^ 0x80); // 31
 			break;
 		case 32:
 			_mainChannels.palette.frameCount = stream.readUint16(); // 32
@@ -923,11 +923,10 @@ void readSpriteDataD5(Common::SeekableReadStreamEndian &stream, Sprite &sprite, 
 			break;
 		case 2:
 			if (sprite._puppet) {
-				stream.skip(4);
+				stream.readSint16();
 			} else {
-				uint16 castLib = stream.readUint16();
-				uint16 memberID = stream.readUint16();
-				sprite._castId = CastMemberID(memberID, castLib);
+				int castLib = stream.readSint16();
+				sprite._castId = CastMemberID(sprite._castId.member, castLib);
 			}
 			break;
 		case 4:
@@ -939,9 +938,8 @@ void readSpriteDataD5(Common::SeekableReadStreamEndian &stream, Sprite &sprite, 
 			}
 			break;
 		case 6: {
-				uint16 scriptCastLib = stream.readUint16();
-				uint16 scriptMemberID = stream.readUint16();
-				sprite._scriptId = CastMemberID(scriptMemberID, scriptCastLib);
+				int scriptCastLib = stream.readSint16();
+				sprite._scriptId = CastMemberID(sprite._scriptId.member, scriptCastLib);
 			}
 			break;
 		case 8: {
@@ -1139,20 +1137,30 @@ void readSpriteDataD6(Common::SeekableReadStreamEndian &stream, Sprite &sprite, 
 			sprite._backColor = g_director->transformColor(backColor);
 			}
 			break;
-		case 4: {
-				uint16 castLib = stream.readUint16();
+		case 4:
+			if (sprite._puppet || sprite.getAutoPuppet(kAPCast)) {
+				stream.readSint16();
+			} else {
+				int castLib = stream.readSint16();
+				sprite._castId = CastMemberID(sprite._castId.member, castLib);
+			}
+			break;
+		case 6:
+			if (sprite._puppet || sprite.getAutoPuppet(kAPCast)) {
+				stream.readUint16();
+			} else {
 				uint16 memberID = stream.readUint16();
-
-				if (sprite._puppet || sprite.getAutoPuppet(kAPCast))
-					continue;
-
-				sprite._castId = CastMemberID(memberID, castLib);
+				sprite._castId = CastMemberID(memberID, sprite._castId.castLib);  // Inherit castLib from previous frame
 			}
 			break;
 		case 8: {
-				uint16 scriptCastLib = stream.readUint16();
+				int scriptCastLib = stream.readSint16();
+				sprite._scriptId = CastMemberID(sprite._scriptId.member, scriptCastLib);
+			}
+			break;
+		case 10: {
 				uint16 scriptMemberID = stream.readUint16();
-				sprite._scriptId = CastMemberID(scriptMemberID, scriptCastLib);
+				sprite._scriptId = CastMemberID(scriptMemberID, sprite._scriptId.castLib);  // Inherit castLib from previous frame
 			}
 			break;
 		case 12: {
@@ -1247,7 +1255,7 @@ Common::String Frame::formatChannelInfo() {
 		_mainChannels.transType, _mainChannels.transDuration, _mainChannels.transChunkSize);
 	result += Common::String::format("SND: 1  sound1: %d, soundType1: %d\n", _mainChannels.sound1.member, _mainChannels.soundType1);
 	result += Common::String::format("SND: 2  sound2: %d, soundType2: %d\n", _mainChannels.sound2.member, _mainChannels.soundType2);
-	result += Common::String::format("LSCR:   actionId: %d\n", _mainChannels.actionId.member);
+	result += Common::String::format("LSCR:   actionId: %s\n", _mainChannels.actionId.asString().c_str());
 
 	for (int i = 0; i < _numChannels; i++) {
 		Sprite &sprite = *_sprites[i + 1];

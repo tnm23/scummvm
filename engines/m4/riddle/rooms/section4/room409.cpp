@@ -33,7 +33,7 @@ void Room409::init() {
 	digi_preload("409r01b");
 	digi_preload("409r01c");
 	digi_preload("950_s27");
-	ws_demand_location(239, 295, 3);
+	ws_demand_location(_G(my_walker), 239, 295, 3);
 
 	_seriesShadow = series_load("SAFARI SHADOW 3");
 	_seriesDoorOpen = series_load("409 DOOR OPEN");
@@ -46,7 +46,7 @@ void Room409::init() {
 	_seriesReachHand = series_load("RIP TREK MED REACH HAND POS1");
 
 	_turtleRope = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0, 0,
-		triggerMachineByHashCallbackNegative, "TURTLE & rope");
+		triggerMachineByHashCallback, "TURTLE & rope");
 	sendWSMessage_10000(1, _turtleRope, _seriesRope, 1, 20, 100, _seriesRope, 20, 20, 0);
 
 	_volume = 255;
@@ -56,7 +56,7 @@ void Room409::init() {
 	digi_play("409_s04", 3);
 
 	_wolfWalker = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0x300, 0,
-		triggerMachineByHashCallbackNegative, "WOLFIE");
+		triggerMachineByHashCallback, "WOLFIE");
 	sendWSMessage_10000(1, _wolfWalker, _seriesWolfOpensDoor, 1, 20, 350,
 		_seriesWolfOpensDoor, 20, 20, 0);
 }
@@ -89,7 +89,7 @@ void Room409::daemon() {
 		break;
 
 	case 353:
-		ws_walk(323, 295, nullptr, 354, 3);
+		ws_walk(_G(my_walker), 323, 295, nullptr, 354, 3);
 		break;
 
 	case 354:
@@ -97,7 +97,7 @@ void Room409::daemon() {
 		break;
 
 	case 355:
-		ws_walk(333, 319, nullptr, 356, 5);
+		ws_walk(_G(my_walker), 333, 319, nullptr, 356, 5);
 		break;
 
 	case 356:
@@ -107,7 +107,7 @@ void Room409::daemon() {
 	case 357:
 		ws_hide_walker();
 		_ripley = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0x100, 0,
-			triggerMachineByHashCallbackNegative, "rip looks at turtle");
+			triggerMachineByHashCallback, "rip looks at turtle");
 		sendWSMessage_10000(1, _ripley, _seriesRp02, 1, 16, 358,
 			_seriesRp02, 16, 16, 0);
 		break;
@@ -127,7 +127,7 @@ void Room409::daemon() {
 		player_update_info();
 		_ripley = TriggerMachineByHash(1, 1, 0, 0, 0, 0,
 			_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0x100, 0,
-			triggerMachineByHashCallbackNegative, "rip looks around");
+			triggerMachineByHashCallback, "rip looks around");
 		ws_hide_walker();
 		sendWSMessage_10000(1, _ripley, _seriesHeadTurn, 1, 6, -1,
 			_seriesHeadTurn, 6, 6, 0);
@@ -168,11 +168,11 @@ void Room409::daemon() {
 	case 368:
 		terminateMachineAndNull(_ripley);
 		ws_unhide_walker();
-		ws_walk(379, 330, nullptr, 380, 1);
+		ws_walk(_G(my_walker), 379, 330, nullptr, 380, 1);
 		break;
 
 	case 380:
-		setGlobals1(1, _seriesReachHand, 10, 10, 10, 0, 10, 1, 1, 1);
+		setGlobals1(_seriesReachHand, 1, 10, 10, 10, 0, 10, 1, 1, 1);
 		sendWSMessage_110000(381);
 		break;
 
@@ -187,16 +187,17 @@ void Room409::daemon() {
 		break;
 
 	case 384:
-		ws_walk(377, 332, nullptr, 385, 5);
+		ws_walk(_G(my_walker), 377, 332, nullptr, 385, 5);
 		break;
 
 	case 385:
 		player_update_info();
 		_ripley = TriggerMachineByHash(1, 1, 0, 0, 0, 0,
 			_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0x100, 0,
-			triggerMachineByHashCallbackNegative, "rip looks around");
+			triggerMachineByHashCallback, "rip looks around");
 		_shadow = series_place_sprite("SAFARI SHADOW 5", 0,
 			_G(player_info).x, _G(player_info).y, _G(player_info).scale, 0xf00);
+		ws_hide_walker();
 		sendWSMessage_10000(1, _ripley, _seriesReadTelegram, 1, 21, 386,
 			_seriesReadTelegram, 22, 31, 0);
 		break;
@@ -237,7 +238,7 @@ void Room409::daemon() {
 		terminateMachineAndNull(_ripley);
 		terminateMachineAndNull(_shadow);
 		ws_unhide_walker();
-		ws_walk(379, 330, nullptr, 403, 1);
+		ws_walk(_G(my_walker), 379, 330, nullptr, 403, 1);
 		break;
 
 	case 403:
@@ -265,14 +266,14 @@ void Room409::daemon() {
 		break;
 
 	case 407:
-		ws_walk(333, 319, nullptr, 408, 5);
+		ws_walk(_G(my_walker), 333, 319, nullptr, 408, 5);
 		_volume = 255;
 		break;
 
 	case 408:
 		ws_hide_walker();
 		_ripley = TriggerMachineByHash(1, 1, 0, 0, 0, 0, 0, 0, 100, 0x100, 0,
-			triggerMachineByHashCallbackNegative, "rip looks at turtle");
+			triggerMachineByHashCallback, "rip looks at turtle");
 		sendWSMessage_10000(1, _ripley, _seriesRp02, 1, 16, 409, _seriesRp02, 16, 16, 0);
 		break;
 

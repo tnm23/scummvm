@@ -92,14 +92,14 @@ protected:
 	};
 
 public:
-	static void initMethods(MethodProto protos[]) {
+	static void initMethods(const MethodProto protos[]) {
 		if (_methods) {
 			warning("Object::initMethods: Methods already initialized");
 			return;
 		}
 
 		_methods = new SymbolHash;
-		for (MethodProto *mtd = protos; mtd->name; mtd++) {
+		for (const MethodProto *mtd = protos; mtd->name; mtd++) {
 			if (mtd->version > g_lingo->_vm->getVersion())
 				continue;
 
@@ -214,6 +214,7 @@ class ScriptContext : public Object<ScriptContext> {
 public:
 	ScriptType _scriptType;
 	int _id;
+	uint16 _castLibHint;
 	Common::Array<Common::String> _functionNames; // used by cb_localcall
 	Common::HashMap<Common::String, Common::Array<uint32>> _functionByteOffsets;
 	SymbolHash _functionHandlers;
@@ -229,7 +230,7 @@ private:
 	bool _onlyInLctxContexts = false;
 
 public:
-	ScriptContext(Common::String name, ScriptType type = kNoneScript, int id = 0);
+	ScriptContext(Common::String name, ScriptType type = kNoneScript, int id = 0, uint16 castLibHint = 0);
 	ScriptContext(const ScriptContext &sc);
 	~ScriptContext() override;
 

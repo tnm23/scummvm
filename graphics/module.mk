@@ -6,6 +6,7 @@ MODULE_OBJS := \
 	blit/blit-alpha.o \
 	blit/blit-generic.o \
 	blit/blit-scale.o \
+	color_quantizer.o \
 	cursorman.o \
 	font.o \
 	fontman.o \
@@ -43,6 +44,7 @@ MODULE_OBJS := \
 	opengl/context.o \
 	opengl/debug.o \
 	opengl/shader.o \
+	opengl/texture.o \
 	palette.o \
 	pixelformat.o \
 	pm5544.o \

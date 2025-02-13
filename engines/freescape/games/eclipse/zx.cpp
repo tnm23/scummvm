@@ -75,12 +75,12 @@ void EclipseEngine::loadAssetsZXFullGame() {
 
 	if (isEclipse2()) {
 		loadMessagesFixedSize(&file, 0x2ac, 16, 30);
-		loadFonts(&file, 0x61c3, _font);
+		loadFonts(&file, 0x61c3);
 		loadSpeakerFxZX(&file, 0x8c6, 0x91a);
 		load8bitBinary(&file, 0x63bb, 4);
 	} else {
 		loadMessagesFixedSize(&file, 0x2ac, 16, 23);
-		loadFonts(&file, 0x6163, _font);
+		loadFonts(&file, 0x6163);
 		loadSpeakerFxZX(&file, 0x816, 0x86a);
 		load8bitBinary(&file, 0x635b, 4);
 
@@ -133,13 +133,13 @@ void EclipseEngine::loadAssetsZXDemo() {
 		loadSpeakerFxZX(&file, 0x798, 0x7ec);
 		loadMessagesFixedSize(&file, 0x2ac, 16, 23);
 		loadMessagesFixedSize(&file, 0x56e6, 264, 1);
-		loadFonts(&file, 0x5f7b, _font);
+		loadFonts(&file, 0x5f7b);
 		load8bitBinary(&file, 0x6173, 4);
 	} else if (_variant & GF_ZX_DEMO_CRASH) {
 		loadSpeakerFxZX(&file, 0x65c, 0x6b0);
 		loadMessagesFixedSize(&file, 0x364, 16, 9);
 		loadMessagesFixedSize(&file, 0x5901, 264, 5);
-		loadFonts(&file, 0x6589, _font);
+		loadFonts(&file, 0x6589);
 		load8bitBinary(&file, 0x6781, 4);
 	} else
 		error("Unknown ZX Spectrum demo variant");
@@ -200,7 +200,8 @@ void EclipseEngine::drawZXUI(Graphics::Surface *surface) {
 		drawStringInSurface(_currentArea->_name, 102, 141, back, yellow, surface);
 
 	Common::String scoreStr = Common::String::format("%07d", score);
-	drawStringInSurface(scoreStr, 133, 11, back, gray, surface, 'Z' - '0' + 1);
+	Common::String encodedScoreStr = shiftStr(scoreStr, 'Z' - '0' + 1);
+	drawStringInSurface(encodedScoreStr, 133, 11, back, gray, surface, 'Z' - '0' + 1);
 
 	Common::String shieldStr = Common::String::format("%d", shield);
 
@@ -221,13 +222,13 @@ void EclipseEngine::drawZXUI(Graphics::Surface *surface) {
 	Common::Rect jarWater(120, 192 - energy - 4, 144, 192 - 4);
 	surface->fillRect(jarWater, blue);
 
-	drawStringInSurface(Common::String('0' + _angleRotationIndex - 3), 79, 141, back, yellow, surface, 'Z' - '$' + 1);
-	drawStringInSurface(Common::String('3' - _playerStepIndex), 63, 141, back, yellow, surface, 'Z' - '$' + 1);
-	drawStringInSurface(Common::String('7' - _playerHeightNumber), 240, 141, back, yellow, surface, 'Z' - '$' + 1);
+	drawStringInSurface(shiftStr("0", 'Z' - '$' + 1 - _angleRotationIndex), 79, 141, back, yellow, surface);
+	drawStringInSurface(shiftStr("3", 'Z' - '$' + 1 - _playerStepIndex), 63, 141, back, yellow, surface);
+	drawStringInSurface(shiftStr("7", 'Z' - '$' + 1 - _playerHeightNumber), 240, 141, back, yellow, surface);
 
 	if (_shootingFrames > 0) {
-		drawStringInSurface("4", 232, 141, back, yellow, surface, 'Z' - '$' + 1);
-		drawStringInSurface("<", 240, 141, back, yellow, surface, 'Z' - '$' + 1);
+		drawStringInSurface(shiftStr("4", 'Z' - '$' + 1), 232, 141, back, yellow, surface);
+		drawStringInSurface(shiftStr("<", 'Z' - '$' + 1) , 240, 141, back, yellow, surface);
 	}
 	drawAnalogClock(surface, 89, 172, back, back, gray);
 

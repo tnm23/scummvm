@@ -37,19 +37,20 @@ private:
 	int _ripLowReach2 = 0;
 	int _ripTalker = 0;
 	int _ripLHandTalk = 0;
+	int _ripHandTalk3 = 0;
 	int _tt01 = 0;
 	int _tt02 = 0;
 	int _tt03 = 0;
 	int _tt05 = 0;
-	int _old01 = 0;
-	int _old02 = 0;
-	int _old05 = 0;
-	int _old08 = 0;
-	int _old05a = 0;
-	int _old05b = 0;
-	int _old05c = 0;
-	int _old05d = 0;
-	int _old05f = 0;
+	int _old1 = 0;
+	int _old2 = 0;
+	int _old5 = 0;
+	int _old8 = 0;
+	int _old5a = 0;
+	int _old5b = 0;
+	int _old5c = 0;
+	int _old5d = 0;
+	int _old5f = 0;
 	int _all5a = 0;
 	int _loop0 = 0;
 	int _loop1 = 0;
@@ -58,6 +59,8 @@ private:
 	machine *_shadow = nullptr;
 	machine *_shadow5 = nullptr;
 	machine *_tt = nullptr;
+	machine *_ttShadow = nullptr;
+	machine *_ttTalker = nullptr;
 	machine *_ol = nullptr;
 	machine *_ol2 = nullptr;
 	machine *_stump = nullptr;
@@ -66,11 +69,11 @@ private:
 	machine *_puffin = nullptr;
 	machine *_end1 = nullptr;
 	machine *_end2 = nullptr;
-	int _val1 = 0;
-	int _val2 = 0;
-	int _val3 = 0;
-	int _val4 = 0;
-	int _val5 = 0;
+	int _ripleyShould = 0;
+	int _ripleyMode = 0;
+	int _oldMode = 0;
+	int _oldShould = 0;
+	int _ctr1 = 0;
 
 	void conv608a();
 	bool takeStump1();
@@ -80,6 +83,7 @@ private:
 	bool takeLighter();
 	bool hornCordWater();
 	bool lookPuffin();
+	void usePole();
 
 public:
 	Room608() : Room() {}
@@ -89,6 +93,7 @@ public:
 	void daemon() override;
 	void pre_parser() override;
 	void parser() override;
+	void syncGame(Common::Serializer &s) override;
 };
 
 } // namespace Rooms

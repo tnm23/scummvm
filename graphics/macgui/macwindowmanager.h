@@ -93,6 +93,7 @@ enum {
 	kWMModeForceMacFontsInWin95 = (1 << 11), // Enforce Mac font for languages which don't have glyphs in ms_sans_serif.ttf
 	kWMModeNoCursorOverride     = (1 << 12),
 	kWMModeForceMacBorder       = (1 << 13),
+	kWMModeForceMacFonts        = (1 << 14), // Enforce Mac fonts even when there are viable TTF substitutions
 };
 
 }
@@ -111,7 +112,7 @@ class MacFont;
 
 class MacFontManager;
 
-typedef Common::Array<byte *> MacPatterns;
+typedef Common::Array<const byte *> MacPatterns;
 
 struct MacPlotData {
 	Graphics::ManagedSurface *surface;
@@ -139,8 +140,6 @@ struct ZoomBox {
 	uint32 nextTime;
 };
 
-typedef void (* MacDrawPixPtr)(int, int, int, void *);
-
 /**
  * A manager class to handle window creation, destruction,
  * drawing, moving and event handling.
@@ -150,8 +149,8 @@ public:
 	MacWindowManager(uint32 mode = 0, MacPatterns *patterns = nullptr, Common::Language language = Common::UNK_LANG);
 	~MacWindowManager();
 
-	MacDrawPixPtr getDrawPixel();
-	MacDrawPixPtr getDrawInvertPixel();
+	Primitives &getDrawPrimitives() const { return *_macDrawPrimitives; }
+	Primitives &getDrawInvertPrimitives() const;
 
 	/**
 	 * Mutator to indicate the surface onto which the desktop will be drawn.
@@ -342,6 +341,7 @@ public:
 
 	void setEngine(Engine *engine);
 	void setEngineRedrawCallback(void *engine, void (*redrawCallback)(void *engine));
+	void setEngineActivateMenuCallback(void *engine, void (*redrawCallback)(void *engine));
 
 	void passPalette(const byte *palette, uint size);
 	template <typename T> void decomposeColor(uint32 color, byte &r, byte &g, byte &b);
@@ -450,6 +450,9 @@ private:
 
 	bool _inEditableArea;
 
+	Primitives *_macDrawPrimitives;
+	Primitives *_macDrawInvertPrimitives;
+
 	MacPatterns _patterns;
 	MacPatterns _builtinPatterns;
 	byte *_palette;
@@ -461,6 +464,8 @@ private:
 	Engine *_engineP;
 	void *_engineR;
 	void (*_redrawEngineCallback)(void *engine);
+	void *_engineAM;
+	void (*_activateMenuCallback)(void *engine);
 
 	MacCursorType _tempType = kMacCursorArrow;
 	Common::Stack<MacCursorType> _cursorTypeStack;

@@ -230,34 +230,35 @@ protected:
 		FINGER_SUBPIXEL_MULTIPLIER = 16 // multiplier for sub-pixel resolution
 	};
 
-	typedef struct TouchFinger {
+	struct TouchFinger {
 		int id = -1; // -1: no touch
 		uint32 timeLastDown = 0;
 		int lastX = 0; // last known screen coordinates
 		int lastY = 0; // last known screen coordinates
 		float lastDownX = 0; // SDL touch coordinates when last pressed down
 		float lastDownY = 0; // SDL touch coordinates when last pressed down
-	} TouchFinger;
+	};
 
-	typedef enum DraggingType {
+	enum DraggingType {
 		DRAG_NONE = 0,
 		DRAG_TWO_FINGER,
 		DRAG_THREE_FINGER,
-	} DraggingType;
+	};
 
-	typedef struct TouchPanelState {
+	struct TouchPanelState {
 		TouchFinger _finger[MAX_NUM_FINGERS]; // keep track of finger status
 		DraggingType _multiFingerDragging = DRAG_NONE; // keep track whether we are currently drag-and-dropping
 		unsigned int _simulatedClickStartTime[2] = {0, 0}; // initiation time of last simulated left or right click (zero if no click)
 		int _hiresDX = 0; // keep track of slow, sub-pixel, finger motion across multiple frames
 		int _hiresDY = 0;
-	} TouchPanelState;
+		bool _tapMade = false;
+	};
 
 	Common::HashMap<unsigned long, TouchPanelState> _touchPanels;
 
 private:
 	void preprocessFingerDown(SDL_Event *event);
-	void preprocessFingerUp(SDL_Event *event);
+	bool preprocessFingerUp(SDL_Event *event, Common::Event *ev);
 	void preprocessFingerMotion(SDL_Event *event);
 	void finishSimulatedMouseClicks(void);
 #endif

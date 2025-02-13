@@ -152,12 +152,12 @@ ManagedSurface &ManagedSurface::operator=(const ManagedSurface &surf) {
 		_innerSurface.h = surf.h;
 		_innerSurface.pitch = surf.pitch;
 		this->format = surf.format;
-
-		// Copy miscellaneous properties
-		_transparentColorSet = surf._transparentColorSet;
-		_transparentColor = surf._transparentColor;
-		_palette = surf._palette ? new Palette(*surf._palette) : nullptr;
 	}
+
+	// Copy miscellaneous properties
+	_transparentColorSet = surf._transparentColorSet;
+	_transparentColor = surf._transparentColor;
+	_palette = surf._palette ? new Palette(*surf._palette) : nullptr;
 
 	return *this;
 }
@@ -431,6 +431,68 @@ void ManagedSurface::simpleBlitFromInner(const Surface &src, const Common::Rect 
 	addDirtyRect(dstRectC);
 }
 
+void ManagedSurface::maskBlitFrom(const Surface &src, const Surface &mask, const Palette *srcPalette) {
+	maskBlitFrom(src, mask, Common::Rect(0, 0, src.w, src.h), Common::Point(0, 0), srcPalette);
+}
+
+void ManagedSurface::maskBlitFrom(const Surface &src, const Surface &mask, const Common::Point &destPos, const Palette *srcPalette) {
+	maskBlitFrom(src, mask, Common::Rect(0, 0, src.w, src.h), destPos, srcPalette);
+}
+
+void ManagedSurface::maskBlitFrom(const Surface &src, const Surface &mask, const Common::Rect &srcRect,
+		const Common::Point &destPos, const Palette *srcPalette) {
+	maskBlitFromInner(src, mask, srcRect, destPos, srcPalette);
+}
+
+void ManagedSurface::maskBlitFrom(const ManagedSurface &src, const ManagedSurface &mask) {
+	maskBlitFrom(src, mask, Common::Rect(0, 0, src.w, src.h), Common::Point(0, 0));
+}
+
+void ManagedSurface::maskBlitFrom(const ManagedSurface &src, const ManagedSurface &mask, const Common::Point &destPos) {
+	maskBlitFrom(src, mask, Common::Rect(0, 0, src.w, src.h), destPos);
+}
+
+void ManagedSurface::maskBlitFrom(const ManagedSurface &src, const ManagedSurface &mask,
+		const Common::Rect &srcRect, const Common::Point &destPos) {
+	maskBlitFromInner(src._innerSurface, mask._innerSurface, srcRect, destPos, src._palette);
+}
+
+void ManagedSurface::maskBlitFromInner(const Surface &src, const Surface &mask,
+		const Common::Rect &srcRect, const Common::Point &destPos,
+		const Palette *srcPalette) {
+
+	if (mask.w != src.w || mask.h != src.h)
+		error("Surface::maskBlitFrom: mask dimensions do not match src");
+
+	Common::Rect srcRectC = srcRect;
+	Common::Rect dstRectC = srcRect;
+
+	dstRectC.moveTo(destPos.x, destPos.y);
+	clip(srcRectC, dstRectC);
+
+	const byte *srcPtr = (const byte *)src.getBasePtr(srcRectC.left, srcRectC.top);
+	const byte *maskPtr = (const byte *)mask.getBasePtr(srcRectC.left, srcRectC.top);
+	byte *dstPtr = (byte *)getBasePtr(dstRectC.left, dstRectC.top);
+
+	if (format == src.format) {
+		maskBlit(dstPtr, srcPtr, maskPtr, pitch, src.pitch, mask.pitch, srcRectC.width(), srcRectC.height(),
+			format.bytesPerPixel);
+	} else if (src.format.isCLUT8()) {
+		assert(srcPalette);
+		assert(!format.isCLUT8());
+
+		uint32 map[256];
+		convertPaletteToMap(map, srcPalette->data(), srcPalette->size(), format);
+		crossMaskBlitMap(dstPtr, srcPtr, maskPtr, pitch, src.pitch, mask.pitch, srcRectC.width(), srcRectC.height(),
+			format.bytesPerPixel, map);
+	} else {
+		crossMaskBlit(dstPtr, srcPtr, maskPtr, pitch, src.pitch, mask.pitch, srcRectC.width(), srcRectC.height(),
+			format, src.format);
+	}
+
+	addDirtyRect(dstRectC);
+}
+
 void ManagedSurface::blitFrom(const Surface &src, const Palette *srcPalette) {
 	blitFrom(src, Common::Rect(0, 0, src.w, src.h), Common::Point(0, 0), srcPalette);
 }
@@ -632,82 +694,63 @@ void ManagedSurface::blitFromInner(const Surface &src, const Common::Rect &srcRe
 }
 
 void ManagedSurface::transBlitFrom(const Surface &src, uint32 transColor, bool flipped,
-		uint32 overrideColor, uint32 srcAlpha, const Palette *srcPalette) {
+		uint32 srcAlpha, const Palette *srcPalette) {
 	transBlitFrom(src, Common::Rect(0, 0, src.w, src.h), Common::Rect(0, 0, this->w, this->h),
-		transColor, flipped, overrideColor, srcAlpha, nullptr, false, srcPalette);
+		transColor, flipped, srcAlpha, srcPalette);
 }
 
 void ManagedSurface::transBlitFrom(const Surface &src, const Common::Point &destPos,
-		uint32 transColor, bool flipped, uint32 overrideColor, uint32 srcAlpha, const Palette *srcPalette) {
+		uint32 transColor, bool flipped, uint32 srcAlpha, const Palette *srcPalette) {
 	transBlitFrom(src, Common::Rect(0, 0, src.w, src.h), Common::Rect(destPos.x, destPos.y,
-		destPos.x + src.w, destPos.y + src.h), transColor, flipped, overrideColor, srcAlpha, nullptr, false, srcPalette);
-}
-
-void ManagedSurface::transBlitFrom(const Surface &src, const Common::Point &destPos,
-		const ManagedSurface &mask, const Palette *srcPalette) {
-	transBlitFrom(src, Common::Rect(0, 0, src.w, src.h), Common::Rect(destPos.x, destPos.y,
-		destPos.x + src.w, destPos.y + src.h), 0, false, 0, 0xff, &mask._innerSurface, true, srcPalette);
-}
-
-void ManagedSurface::transBlitFrom(const Surface &src, const Common::Point &destPos,
-		const Surface &mask, const Palette *srcPalette) {
-	transBlitFrom(src, Common::Rect(0, 0, src.w, src.h), Common::Rect(destPos.x, destPos.y,
-		destPos.x + src.w, destPos.y + src.h), 0, false, 0, 0xff, &mask, true, srcPalette);
+		destPos.x + src.w, destPos.y + src.h), transColor, flipped, srcAlpha, srcPalette);
 }
 
 void ManagedSurface::transBlitFrom(const Surface &src, const Common::Rect &srcRect,
-		const Common::Point &destPos, uint32 transColor, bool flipped, uint32 overrideColor, uint32 srcAlpha, const Palette *srcPalette) {
+		const Common::Point &destPos, uint32 transColor, bool flipped, uint32 srcAlpha, const Palette *srcPalette) {
 	transBlitFrom(src, srcRect, Common::Rect(destPos.x, destPos.y,
-		destPos.x + srcRect.width(), destPos.y + srcRect.height()), transColor, flipped, overrideColor, srcAlpha, nullptr, false, srcPalette);
+		destPos.x + srcRect.width(), destPos.y + srcRect.height()), transColor, flipped, srcAlpha, srcPalette);
 }
 
 void ManagedSurface::transBlitFrom(const Surface &src, const Common::Rect &srcRect, const Common::Rect &destRect, const Palette *srcPalette) {
-	transBlitFrom(src, srcRect, destRect, 0, false, 0, 0xff, nullptr, false, srcPalette);
+	transBlitFrom(src, srcRect, destRect, 0, false, 0xff, srcPalette);
 }
 
 void ManagedSurface::transBlitFrom(const Surface &src, const Common::Rect &srcRect,
-		const Common::Rect &destRect, uint32 transColor, bool flipped, uint32 overrideColor, uint32 srcAlpha,
-		const Surface *mask, bool maskOnly, const Palette *srcPalette) {
-	transBlitFromInner(src, srcRect, destRect, transColor, flipped, overrideColor, srcAlpha,
-		srcPalette, nullptr, mask, maskOnly);
+		const Common::Rect &destRect, uint32 transColor, bool flipped, uint32 srcAlpha,
+		const Palette *srcPalette) {
+	transBlitFromInner(src, srcRect, destRect, transColor, flipped, srcAlpha,
+		srcPalette, nullptr);
 }
 
 void ManagedSurface::transBlitFrom(const ManagedSurface &src, uint32 transColor, bool flipped,
-		uint32 overrideColor, uint32 srcAlpha) {
+		uint32 srcAlpha) {
 	transBlitFrom(src, Common::Rect(0, 0, src.w, src.h), Common::Rect(0, 0, this->w, this->h),
-		transColor, flipped, overrideColor, srcAlpha);
+		transColor, flipped, srcAlpha);
 }
 
 void ManagedSurface::transBlitFrom(const ManagedSurface &src, const Common::Point &destPos,
-		uint32 transColor, bool flipped, uint32 overrideColor, uint32 srcAlpha) {
+		uint32 transColor, bool flipped, uint32 srcAlpha) {
 	transBlitFrom(src, Common::Rect(0, 0, src.w, src.h), Common::Rect(destPos.x, destPos.y,
-		destPos.x + src.w, destPos.y + src.h), transColor, flipped, overrideColor, srcAlpha);
-}
-
-void ManagedSurface::transBlitFrom(const ManagedSurface &src, const Common::Point &destPos,
-		const ManagedSurface &mask) {
-	transBlitFrom(src, Common::Rect(0, 0, src.w, src.h), Common::Rect(destPos.x, destPos.y,
-		destPos.x + src.w, destPos.y + src.h), 0, false, 0, 0xff, &mask._innerSurface, true);
+		destPos.x + src.w, destPos.y + src.h), transColor, flipped, srcAlpha);
 }
 
 void ManagedSurface::transBlitFrom(const ManagedSurface &src, const Common::Rect &srcRect,
-		const Common::Point &destPos, uint32 transColor, bool flipped, uint32 overrideColor, uint32 srcAlpha) {
+		const Common::Point &destPos, uint32 transColor, bool flipped, uint32 srcAlpha) {
 	uint32 tColor = !transColor && src._transparentColorSet ? src._transparentColor : transColor;
 
 	transBlitFrom(src, srcRect, Common::Rect(destPos.x, destPos.y, destPos.x + srcRect.width(),
-		destPos.y + srcRect.height()), tColor, flipped, overrideColor, srcAlpha);
+		destPos.y + srcRect.height()), tColor, flipped, srcAlpha);
 }
 
 void ManagedSurface::transBlitFrom(const ManagedSurface &src, const Common::Rect &srcRect,
-		const Common::Rect &destRect, uint32 transColor, bool flipped, uint32 overrideColor, uint32 srcAlpha,
-		const Surface *mask, bool maskOnly) {
+		const Common::Rect &destRect, uint32 transColor, bool flipped, uint32 srcAlpha) {
 	if (transColor == (uint32)-1 && src._transparentColorSet)
 		transColor = src._transparentColor;
 	const Palette *srcPalette = src._palette;
 	const Palette *dstPalette = _palette;
 
-	transBlitFromInner(src._innerSurface, srcRect, destRect, transColor, flipped, overrideColor,
-		srcAlpha, srcPalette, dstPalette, mask, maskOnly);
+	transBlitFromInner(src._innerSurface, srcRect, destRect, transColor, flipped,
+		srcAlpha, srcPalette, dstPalette);
 }
 
 static byte *createPaletteLookup(const Palette *srcPalette, const Palette *dstPalette) {
@@ -736,7 +779,7 @@ static byte *createPaletteLookup(const Palette *srcPalette, const Palette *dstPa
 
 template<typename TSRC, typename TDEST>
 void transBlitPixel(TSRC srcVal, TDEST &destVal, const Graphics::PixelFormat &srcFormat, const Graphics::PixelFormat &destFormat,
-		uint32 overrideColor, uint32 srcAlpha, const Palette *srcPalette, const byte *lookup) {
+		uint32 srcAlpha, const Palette *srcPalette, const byte *lookup) {
 	// Decode and re-encode each pixel
 	byte aSrc, rSrc, gSrc, bSrc;
 	if (srcFormat.isCLUT8()) {
@@ -780,13 +823,13 @@ void transBlitPixel(TSRC srcVal, TDEST &destVal, const Graphics::PixelFormat &sr
 
 template<>
 void transBlitPixel<byte, byte>(byte srcVal, byte &destVal, const Graphics::PixelFormat &srcFormat, const Graphics::PixelFormat &destFormat,
-		uint32 overrideColor, uint32 srcAlpha, const Palette *srcPalette, const byte *lookup) {
+		uint32 srcAlpha, const Palette *srcPalette, const byte *lookup) {
 	if (srcAlpha == 0) {
 		// Completely transparent, so skip
 		return;
 	}
 
-	destVal = overrideColor ? overrideColor : srcVal;
+	destVal = srcVal;
 
 	if (lookup)
 		destVal = lookup[destVal];
@@ -794,8 +837,8 @@ void transBlitPixel<byte, byte>(byte srcVal, byte &destVal, const Graphics::Pixe
 
 template<typename TSRC, typename TDEST>
 void transBlit(const Surface &src, const Common::Rect &srcRect, ManagedSurface &dest, const Common::Rect &destRect,
-		TSRC transColor, bool flipped, uint32 overrideColor, uint32 srcAlpha, const Palette *srcPalette,
-		const Palette *dstPalette, const Surface *mask, bool maskOnly) {
+		TSRC transColor, bool flipped, uint32 srcAlpha, const Palette *srcPalette,
+		const Palette *dstPalette) {
 	int scaleX = SCALE_THRESHOLD * srcRect.width() / destRect.width();
 	int scaleY = SCALE_THRESHOLD * srcRect.height() / destRect.height();
 	byte rst = 0, gst = 0, bst = 0, rdt = 0, gdt = 0, bdt = 0;
@@ -821,11 +864,6 @@ void transBlit(const Surface &src, const Common::Rect &srcRect, ManagedSurface &
 		if (destY < 0 || destY >= dest.h)
 			continue;
 		const TSRC *srcLine = (const TSRC *)src.getBasePtr(srcRect.left, scaleYCtr / SCALE_THRESHOLD + srcRect.top);
-		const TSRC *mskLine = nullptr;
-
-		if (mask)
-			mskLine = (const TSRC *)mask->getBasePtr(srcRect.left, scaleYCtr / SCALE_THRESHOLD + srcRect.top);
-
 		TDEST *destLine = (TDEST *)dest.getBasePtr(destRect.left, destY);
 
 		// Loop through drawing the pixels of the row
@@ -848,31 +886,19 @@ void transBlit(const Surface &src, const Common::Rect &srcRect, ManagedSurface &
 				isDestPixelTrans = destVal == dest.getTransparentColor();
 			}
 
-			if (isSrcTrans32 && !maskOnly) {
+			if (isSrcTrans32) {
 				src.format.colorToRGB(srcVal, r, g, b);
 				if (rst == r && gst == g && bst == b)
 					continue;
 
-			} else if (srcVal == transColor && !maskOnly)
+			} else if (srcVal == transColor)
 				continue;
 
-			if (mask) {
-				TSRC mskVal = mskLine[flipped ? src.w - scaleXCtr / SCALE_THRESHOLD - 1 : scaleXCtr / SCALE_THRESHOLD];
-				if (!mskVal)
-					continue;
+			if (isDestPixelTrans)
+				// Remove transparent color on dest so it isn't alpha blended
+				destVal = 0;
 
-				if (isDestPixelTrans)
-					// Remove transparent color on dest so it isn't alpha blended
-					destVal = 0;
-
-				transBlitPixel<TSRC, TDEST>(srcVal, destVal, src.format, dest.format, overrideColor, mskVal, srcPalette, lookup);
-			} else {
-				if (isDestPixelTrans)
-					// Remove transparent color on dest so it isn't alpha blended
-					destVal = 0;
-
-				transBlitPixel<TSRC, TDEST>(srcVal, destVal, src.format, dest.format, overrideColor, srcAlpha, srcPalette, lookup);
-			}
+			transBlitPixel<TSRC, TDEST>(srcVal, destVal, src.format, dest.format, srcAlpha, srcPalette, lookup);
 		}
 	}
 
@@ -881,19 +907,14 @@ void transBlit(const Surface &src, const Common::Rect &srcRect, ManagedSurface &
 
 #define HANDLE_BLIT(SRC_BYTES, DEST_BYTES, SRC_TYPE, DEST_TYPE) \
 	if (src.format.bytesPerPixel == SRC_BYTES && format.bytesPerPixel == DEST_BYTES) \
-		transBlit<SRC_TYPE, DEST_TYPE>(src, srcRect, *this, destRect, transColor, flipped, overrideColor, srcAlpha, srcPalette, dstPalette, mask, maskOnly); \
+		transBlit<SRC_TYPE, DEST_TYPE>(src, srcRect, *this, destRect, transColor, flipped, srcAlpha, srcPalette, dstPalette); \
 	else
 
 void ManagedSurface::transBlitFromInner(const Surface &src, const Common::Rect &srcRect,
-		const Common::Rect &destRect, uint32 transColor, bool flipped, uint32 overrideColor,
-		uint32 srcAlpha, const Palette *srcPalette, const Palette *dstPalette, const Surface *mask, bool maskOnly) {
+		const Common::Rect &destRect, uint32 transColor, bool flipped,
+		uint32 srcAlpha, const Palette *srcPalette, const Palette *dstPalette) {
 	if (src.w == 0 || src.h == 0 || destRect.width() == 0 || destRect.height() == 0)
 		return;
-
-	if (mask) {
-		if (mask->w != src.w || mask->h != src.h)
-			error("Surface::transBlitFrom: mask dimensions do not match src");
-	}
 
 	HANDLE_BLIT(1, 1, uint8,  uint8)
 	HANDLE_BLIT(1, 2, uint8,  uint16)

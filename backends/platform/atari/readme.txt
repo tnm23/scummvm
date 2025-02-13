@@ -1,5 +1,5 @@
-ScummVM 2.9.0
-=============
+ScummVM 2.10.0git
+==============
 
 This is a port of ScummVM (https://www.scummvm.org), a program which allows you
 to run certain classic graphical adventure and role-playing games, provided you
@@ -35,7 +35,7 @@ Differences between the versions
 --------------------------------
 
 After talking to Keith we have decided to provide three flavours of ScummVM.
-Please refer to https://docs.scummvm.org/en/v2.9.0/other_platforms/atari.html
+Please refer to https://docs.scummvm.org/en/v2.10.0git/other_platforms/atari.html
 for more details (TBD).
 
 Atari Full package
@@ -470,12 +470,14 @@ Known issues
 - aspect ratio correction has no effect on TT because is not possible to alter
   its vertical screen refresh frequency.
 
-- the talkie version of MI1 needs to be merged from two sources: first generate
-  the DOS version and then additionally also the flac version. Then convert all
-  *.flac files into *.wav and replace monkey.sof (flac) with monster.sou (DOS).
-  And of course, don't forget to set the extra path in Game options to the
-  folder where *.wav files are located! For MI2 just use the DOS version, there
-  are no CD tracks available. :(
+- the talkie version of SOMI needs to be merged from two sources:
+  - the DOS version (install.bat) to obtain file "monster.sou"
+  - the FLAC version (install_flac.bat) to obtain folders "cd_music_flac" and
+    "se_music_flac" (these *.flac files then have to be converted to *.wav
+    manually)
+  - files "monkey.000" and "monkey.001" can be taken from either version
+  - point the extra path to the folder with *.wav files (or copy its content
+    where monkey.00? files are located)
 
 - following engines have been explicitly disabled:
   - Cine (2 games)
@@ -496,12 +498,6 @@ Known issues
       https://bugs.scummvm.org/ticket/14790
     - this prevents adding the 15 MB ultima.dat to the release archive
     - https://wiki.scummvm.org/index.php?title=Ultima
-
-- Indy4 (the adventure) may have a bug in the screen when you K.O. the bouncer.
-  I was able to get a freeze when he fell to the ground but currently I am
-  unable to reproduce it. It may be related to the intensive mouse clicking
-  during that scene so feel free to use keypad for the fight and report whether
-  it has improved the situation.
 
 - When using FreeMiNT, ScummVM requires a recent kernel (>= 2021), otherwise
   keyboard handling won't work properly.
@@ -535,7 +531,7 @@ Closing words
 Many optimisations and improvements wouldn't be possible without help of Eero
 Tamminen, so thank you for all the help with profiling in Hatari.
 
-Miro Kropacek aka MiKRO / Mystic Bytes, 19.12.2023
+Miro Kropacek aka MiKRO
 Kosice / Slovakia
 miro.kropacek@gmail.com
 http://mikro.atari.org

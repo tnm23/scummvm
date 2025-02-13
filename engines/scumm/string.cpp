@@ -79,7 +79,7 @@ void ScummEngine::printString(int m, const byte *msg) {
 		// reactions to Max beating up the scientist run much too quick
 		// for the animation to match. We get around this by slowing
 		// down that animation.
- 		//
+		//
 		// In the italian CD version, the whole scene is sped up to
 		// keep up with Sam's speech. We compensate for this by slowing
 		// down the other animations.
@@ -450,7 +450,8 @@ bool ScummEngine::handleNextCharsetCode(Actor *a, int *code) {
 			oldy = _charset->getFontHeight();
 			_charset->setCurID(*buffer++);
 			buffer += 2;
-			memcpy(_charsetColorMap, _charsetData[_charset->getCurID()], 4);
+			if (_charset->getCurID() != -1)
+				memcpy(_charsetColorMap, _charsetData[_charset->getCurID()], 4);
 			_nextTop -= _charset->getFontHeight() - oldy;
 			break;
 		default:
@@ -971,7 +972,7 @@ void ScummEngine::displayDialog() {
 		int s;
 
 		_string[0].xpos = a->getPos().x - _virtscr[kMainVirtScreen].xstart;
-		_string[0].ypos = a->getPos().y - a->getElevation() - _screenTop - _screenDrawOffset;
+		_string[0].ypos = a->getPos().y - a->getElevation() - _screenTop;
 
 		if (_game.version <= 5) {
 			if (VAR(VAR_V5_TALK_STRING_Y) < 0) {
@@ -1005,7 +1006,7 @@ void ScummEngine::displayDialog() {
 			_string[0].xpos = _screenWidth - 80;
 	}
 
-	_charset->_top = _string[0].ypos + _screenTop + _screenDrawOffset;
+	_charset->_top = _string[0].ypos + _screenTop;
 	_charset->_startLeft = _charset->_left = _string[0].xpos;
 	_charset->_right = _string[0].right;
 	_charset->_center = _string[0].center;
@@ -1016,7 +1017,7 @@ void ScummEngine::displayDialog() {
 	else
 		_charset->setCurID(_string[0].charset);
 
-	if (_game.version >= 5)
+	if (_game.version >= 5 && _charset->getCurID() != -1)
 		memcpy(_charsetColorMap, _charsetData[_charset->getCurID()], 4);
 
 #ifndef DISABLE_TOWNS_DUAL_LAYER_MODE
@@ -1113,6 +1114,18 @@ void ScummEngine::displayDialog() {
 	if (_isRTL)
 		fakeBidiString(_charsetBuffer + _charsetBufPos, true, sizeof(_charsetBuffer) - _charsetBufPos);
 
+	if (_sound->shouldInjectMISEAudio()) {
+		int numberOfWaits = countNumberOfWaits();
+		int32 currentActor = VAR_TALK_ACTOR != 0xFF ? VAR(VAR_TALK_ACTOR) : 0;
+
+		// Explicitly truncate all relevant params to uint16! This is intentional!
+		_sound->startRemasteredSpeech(
+			(const char *)&_charsetBuffer[_charsetBufPos],
+			(uint16)_currentRoom,
+			(uint16)currentActor,
+			(uint16)numberOfWaits);
+	}
+
 	bool createTextBox = (_macGui && _game.id == GID_INDY3);
 	bool drawTextBox = false;
 
@@ -1208,6 +1221,27 @@ void ScummEngine::displayDialog() {
 #endif
 }
 
+int ScummEngine::countNumberOfWaits() {
+	int idx, numWaits;
+	byte curChar;
+
+	idx = 0;
+	numWaits = 0;
+
+	if (_charsetBufPos) {
+		do {
+			curChar = _charsetBuffer[idx++];
+			if (curChar == 0xFF || curChar == 0xFE) {
+				if (_charsetBuffer[idx] == 3)
+					++numWaits;
+				++idx;
+			}
+		} while (idx < _charsetBufPos);
+	}
+
+	return numWaits;
+}
+
 void ScummEngine::drawString(int a, const byte *msg) {
 	byte buf[270];
 	byte *space;
@@ -1225,7 +1259,7 @@ void ScummEngine::drawString(int a, const byte *msg) {
 	if (_isRTL)
 		fakeBidiString(buf, false, sizeof(buf));
 
-	_charset->_top = _string[a].ypos + _screenTop + _screenDrawOffset;
+	_charset->_top = _string[a].ypos + _screenTop;
 	_charset->_startLeft = _charset->_left = _string[a].xpos;
 	_charset->_right = _string[a].right;
 	_charset->_center = _string[a].center;
@@ -1236,7 +1270,7 @@ void ScummEngine::drawString(int a, const byte *msg) {
 	VirtScreen *vs = findVirtScreen(_charset->_top);
 	bool shadowModeFlag = (vs && vs->number == kMainVirtScreen);
 
-	if (_game.version >= 5)
+	if (_game.version >= 5 && _charset->getCurID() != -1)
 		memcpy(_charsetColorMap, _charsetData[_charset->getCurID()], _game.id == GID_DIG ? sizeof(_charsetColorMap) : 4);
 
 	fontHeight = _charset->getFontHeight();

@@ -37,10 +37,11 @@ class SeekableReadStreamEndian;
 }
 
 namespace Graphics {
+class Primitives;
 class MacWindowManager;
 struct MacPlotData;
 struct WinCursorGroup;
-typedef Common::Array<byte *> MacPatterns;
+typedef Common::Array<const byte *> MacPatterns;
 
 class ManagedSurface;
 }
@@ -117,10 +118,10 @@ struct StartOptions {
 
 struct PaletteV4 {
 	CastMemberID id;
-	byte *palette;
+	const byte *palette;
 	int length;
 
-	PaletteV4(CastMemberID i, byte *p, int l) : id(i), palette(p), length(l) {}
+	PaletteV4(CastMemberID i, const byte *p, int l) : id(i), palette(p), length(l) {}
 	PaletteV4() : id(), palette(nullptr), length(0) {}
 };
 
@@ -173,6 +174,8 @@ public:
 	Lingo *getLingo() const { return _lingo; }
 	Window *getStage() const { return _stage; }
 	Window *getCurrentWindow() const { return _currentWindow; }
+	Window *getOrCreateWindow(Common::String &name);
+	void forgetWindow(Window *window);
 	void setCurrentWindow(Window *window);
 	Window *getCursorWindow() const { return _cursorWindow; }
 	void setCursorWindow(Window *window) { _cursorWindow = window; }
@@ -185,9 +188,9 @@ public:
 	// graphics.cpp
 	bool hasFeature(EngineFeature f) const override;
 
-	void addPalette(CastMemberID &id, byte *palette, int length);
+	void addPalette(CastMemberID &id, const byte *palette, int length);
 	bool setPalette(const CastMemberID &id);
-	void setPalette(byte *palette, uint16 count);
+	void setPalette(const byte *palette, uint16 count);
 	void shiftPalette(int startIndex, int endIndex, bool reverse);
 	void clearPalettes();
 	PaletteV4 *getPalette(const CastMemberID &id);
@@ -210,7 +213,7 @@ public:
 	void setCursor(DirectorCursor type);
 	void draw();
 
-	Graphics::MacDrawPixPtr getInkDrawPixel();
+	Graphics::Primitives *getInkPrimitives();
 	uint32 getColorBlack();
 	uint32 getColorWhite();
 
@@ -235,7 +238,7 @@ public:
 	bool pollEvent(Common::Event &event);
 	bool processEvents(bool captureClick = false, bool skipWindowManager = false);
 	void processEventQUIT();
-	uint32 getMacTicks();
+	int getMacTicks();
 	Common::Array<Common::Event> _injectedEvents;
 
 	// game-quirks.cpp
@@ -299,7 +302,8 @@ private:
 	uint16 _version;
 
 	Window *_stage;
-	Datum *_windowList; // Lingo list
+	Common::Array<Window *> _windowList;
+	Common::Array<Window *> _windowsToForget;
 	Window *_currentWindow;
 	Window *_cursorWindow;
 
@@ -312,10 +316,13 @@ private:
 	PaletteV4 _loaded4Palette;
 
 	Graphics::ManagedSurface *_surface;
+	Graphics::Primitives *_primitives;
 
 	StartOptions _options;
 
 public:
+	const Common::Array<Window *> *getWindowList() { return &_windowList; }
+
 	int _tickBaseline;
 	Common::Path _traceLogFile;
 

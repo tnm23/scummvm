@@ -38,44 +38,9 @@ byte kDarkCGAPalettePinkBlue[4][3] = {
 
 byte kDarkCGAPaletteRedGreen[4][3] = {
 	{0x00, 0x00, 0x00},
-	{0xaa, 0x55, 0x00},
-	{0xaa, 0x00, 0x00},
 	{0x00, 0xaa, 0x00},
-};
-
-static const CGAPaletteEntry rawCGAPaletteByArea[] {
-	{1, (byte *)kDarkCGAPaletteRedGreen},
-	{2, (byte *)kDarkCGAPalettePinkBlue},
-	{3, (byte *)kDarkCGAPaletteRedGreen},
-	{4, (byte *)kDarkCGAPalettePinkBlue},
-	{5, (byte *)kDarkCGAPaletteRedGreen},
-	{6, (byte *)kDarkCGAPalettePinkBlue},
-	{7, (byte *)kDarkCGAPaletteRedGreen},
-	{8, (byte *)kDarkCGAPaletteRedGreen}, // Verified
-	{9, (byte *)kDarkCGAPaletteRedGreen},
-	{10, (byte *)kDarkCGAPalettePinkBlue},
-	{11, (byte *)kDarkCGAPaletteRedGreen},
-	{12, (byte *)kDarkCGAPalettePinkBlue},
-	{13, (byte *)kDarkCGAPaletteRedGreen},
-	{14, (byte *)kDarkCGAPalettePinkBlue},
-	{15, (byte *)kDarkCGAPaletteRedGreen}, // Verified
-	{16, (byte *)kDarkCGAPalettePinkBlue},
-	{17, (byte *)kDarkCGAPalettePinkBlue},
-	{18, (byte *)kDarkCGAPaletteRedGreen}, // Verified
-	{19, (byte *)kDarkCGAPaletteRedGreen},
-	{20, (byte *)kDarkCGAPalettePinkBlue},
-	{21, (byte *)kDarkCGAPaletteRedGreen},
-	{22, (byte *)kDarkCGAPalettePinkBlue},
-	{23, (byte *)kDarkCGAPaletteRedGreen},
-	{24, (byte *)kDarkCGAPalettePinkBlue},
-	{25, (byte *)kDarkCGAPalettePinkBlue},
-	{27, (byte *)kDarkCGAPaletteRedGreen},
-	{28, (byte *)kDarkCGAPalettePinkBlue},
-
-	{31, (byte *)kDarkCGAPaletteRedGreen},
-	{32, (byte *)kDarkCGAPalettePinkBlue},
-	{127, (byte *)kDarkCGAPaletteRedGreen},
-	{0, 0}   // This marks the end
+	{0xaa, 0x00, 0x00},
+	{0xaa, 0x55, 0x00},
 };
 
 void DarkEngine::initDOS() {
@@ -86,7 +51,6 @@ void DarkEngine::initDOS() {
 	else
 		error("Invalid or unknown render mode");
 
-	_rawCGAPaletteByArea = (const CGAPaletteEntry *)&rawCGAPaletteByArea;
 	_maxEnergy = 79;
 	_maxShield = 79;
 }
@@ -108,7 +72,7 @@ void DarkEngine::loadAssetsDOSDemo() {
 		loadSpeakerFxDOS(&file, 0x4837 + 0x200, 0x46e8 + 0x200);
 		loadMessagesFixedSize(&file, 0x4525, 16, 27);
 		loadMessagesFixedSize(&file, 0x993f - 2, 308, 5);
-		loadFonts(&file, 0xa598, _font);
+		loadFonts(&file, 0xa598);
 		loadGlobalObjects(&file, 0x3d04, 23);
 		load8bitBinary(&file, 0xa700, 16);
 		_border = load8bitBinImage(&file, 0x210);
@@ -135,7 +99,7 @@ void DarkEngine::loadAssetsDOSDemo() {
 			error("Failed to open DSIDEC.EXE");
 
 		loadSpeakerFxDOS(&file, 0x3077 + 0x200, 0x2f28 + 0x200);
-		loadFonts(&file, 0x8907, _font);
+		loadFonts(&file, 0x8907);
 		loadMessagesFixedSize(&file, 0x2d65, 16, 27);
 		loadMessagesFixedSize(&file, 0x7c3a, 308, 5);
 		loadGlobalObjects(&file, 0x2554, 23);
@@ -163,7 +127,7 @@ void DarkEngine::loadAssetsDOSFullGame() {
 			error("Failed to open DSIDEE.EXE");
 
 		loadSpeakerFxDOS(&file, 0x4837 + 0x200, 0x46e8 + 0x200);
-		loadFonts(&file, 0xa113, _font);
+		loadFonts(&file, 0xa113);
 		loadMessagesFixedSize(&file, 0x4525, 16, 27);
 		loadGlobalObjects(&file, 0x3d04, 23);
 		load8bitBinary(&file, 0xa280, 16);
@@ -191,7 +155,7 @@ void DarkEngine::loadAssetsDOSFullGame() {
 			error("Failed to open DSIDEC.EXE");
 
 		loadSpeakerFxDOS(&file, 0x3077 + 0x200, 0x2f28 + 0x200);
-		loadFonts(&file, 0x8496, _font);
+		loadFonts(&file, 0x8497);
 		loadMessagesFixedSize(&file, 0x2d65, 16, 27);
 		loadGlobalObjects(&file, 0x2554, 23);
 		load8bitBinary(&file, 0x8600, 16);

@@ -152,6 +152,18 @@ static const byte macCursorCrossBar[] = {
 	3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
 };
 
+template<typename T>
+class MacDrawPrimitives : public Primitives {
+public:
+	void drawPoint(int x, int y, uint32 color, void *data) override;
+};
+
+template<typename T>
+class MacDrawInvertPrimitives : public MacDrawPrimitives<T> {
+public:
+	void drawPoint(int x, int y, uint32 color, void *data) override;
+};
+
 MacWindowManager::MacWindowManager(uint32 mode, MacPatterns *patterns, Common::Language language) {
 	_screen = nullptr;
 	_screenCopy = nullptr;
@@ -179,6 +191,7 @@ MacWindowManager::MacWindowManager(uint32 mode, MacPatterns *patterns, Common::L
 	_engineR = nullptr;
 	_redrawEngineCallback = nullptr;
 	_screenCopyPauseToken = nullptr;
+	_activateMenuCallback = nullptr;
 
 	_colorBlack = kColorBlack;
 	_colorGray80 = kColorGray80;
@@ -193,10 +206,16 @@ MacWindowManager::MacWindowManager(uint32 mode, MacPatterns *patterns, Common::L
 
 	_hilitingWidget = false;
 
-	if (mode & kWMMode32bpp)
+	if (mode & kWMMode32bpp) {
 		_pixelformat = Graphics::PixelFormat(4, 8, 8, 8, 8, 24, 16, 8, 0);
-	else
+		_macDrawPrimitives = new MacDrawPrimitives<uint32>();
+		// No implementation yet
+		_macDrawInvertPrimitives = nullptr;
+	} else {
 		_pixelformat = PixelFormat::createFormatCLUT8();
+		_macDrawPrimitives = new MacDrawPrimitives<byte>();
+		_macDrawInvertPrimitives = new MacDrawInvertPrimitives<byte>();
+	}
 
 	if (patterns) {
 		_patterns = *patterns;
@@ -253,6 +272,9 @@ MacWindowManager::~MacWindowManager() {
 	delete _screenCopy;
 
 	delete _desktop;
+
+	delete _macDrawPrimitives;
+	delete _macDrawInvertPrimitives;
 
 	cleanupDesktopBmp();
 	cleanupDataBundle();
@@ -445,6 +467,9 @@ void MacWindowManager::activateMenu() {
 	if (_mode & kWMModalMenuMode) {
 		activateScreenCopy();
 	}
+
+	if (_activateMenuCallback != nullptr)
+		_activateMenuCallback(_engineAM);
 
 	_menu->setVisible(true);
 }
@@ -761,24 +786,24 @@ void MacWindowManager::removeWindow(MacWindow *target) {
 }
 
 template<typename T>
-void macDrawPixel(int x, int y, int color, void *data) {
+void MacDrawPrimitives<T>::drawPoint(int x, int y, uint32 color, void *data) {
 	MacPlotData *p = (MacPlotData *)data;
 
 	if (p->fillType > p->patterns->size() || !p->fillType)
 		return;
 
-	byte *pat = p->patterns->operator[](p->fillType - 1);
+	const byte *pat = p->patterns->operator[](p->fillType - 1);
 
 	if (p->thickness == 1) {
 		if (x >= 0 && x < p->surface->w && y >= 0 && y < p->surface->h) {
 			uint xu = (uint)x; // for letting compiler optimize it
 			uint yu = (uint)y;
 
-			*((T)p->surface->getBasePtr(xu, yu)) = p->invert ? ~(*((T)p->surface->getBasePtr(xu, yu))) :
+			*((T *)p->surface->getBasePtr(xu, yu)) = p->invert ? ~(*((T *)p->surface->getBasePtr(xu, yu))) :
 				(pat[(yu + p->fillOriginY) % 8] & (1 << (7 - (xu + p->fillOriginX) % 8))) ? color : p->bgColor;
 
 			if (p->mask)
-				*((T)p->mask->getBasePtr(xu, yu)) = 0xff;
+				*((T *)p->mask->getBasePtr(xu, yu)) = 0xff;
 		}
 	} else {
 		int x1 = x;
@@ -791,16 +816,19 @@ void macDrawPixel(int x, int y, int color, void *data) {
 				if (x >= 0 && x < p->surface->w && y >= 0 && y < p->surface->h) {
 					uint xu = (uint)x; // for letting compiler optimize it
 					uint yu = (uint)y;
-					*((T)p->surface->getBasePtr(xu, yu)) = p->invert ? ~(*((T)p->surface->getBasePtr(xu, yu))) :
+					*((T *)p->surface->getBasePtr(xu, yu)) = p->invert ? ~(*((T *)p->surface->getBasePtr(xu, yu))) :
 						(pat[(yu + p->fillOriginY) % 8] & (1 << (7 + (xu - p->fillOriginX) % 8))) ? color : p->bgColor;
 
 					if (p->mask)
-						*((T)p->mask->getBasePtr(xu, yu)) = 0xff;
+						*((T *)p->mask->getBasePtr(xu, yu)) = 0xff;
 				}
 	}
 }
 
-void macDrawInvertPixel(int x, int y, int color, void *data) {
+// TODO: implement for other bpp
+
+template<>
+void MacDrawInvertPrimitives<byte>::drawPoint(int x, int y, uint32 color, void *data) {
 	MacPlotData *p = (MacPlotData *)data;
 
 	if (p->fillType > p->patterns->size() || !p->fillType)
@@ -824,19 +852,11 @@ void macDrawInvertPixel(int x, int y, int color, void *data) {
 	}
 }
 
-MacDrawPixPtr MacWindowManager::getDrawPixel() {
-	if (_pixelformat.bytesPerPixel == 1)
-		return &macDrawPixel<byte *>;
-	else
-		return &macDrawPixel<uint32 *>;
-}
-
 // get the function of drawing invert pixel for default palette
-MacDrawPixPtr MacWindowManager::getDrawInvertPixel() {
-	if (_pixelformat.bytesPerPixel == 1)
-		return &macDrawInvertPixel;
-	warning("function of drawing invert pixel for default palette has not implemented yet");
-	return nullptr;
+Primitives &MacWindowManager::getDrawInvertPrimitives() const {
+	if (!_macDrawInvertPrimitives)
+		warning("function of drawing invert pixel for default palette has not implemented yet");
+	return *_macDrawInvertPrimitives;
 }
 
 void MacWindowManager::loadDesktop() {
@@ -885,7 +905,7 @@ void MacWindowManager::drawDesktop() {
 
 		MacPlotData pd(_desktop, nullptr, &_patterns, kPatternCheckers, 0, 0, 1, _colorWhite);
 
-		Graphics::drawRoundRect(r, kDesktopArc, _colorBlack, true, getDrawPixel(), &pd);
+		getDrawPrimitives().drawRoundRect(r, kDesktopArc, _colorBlack, true, &pd);
 	}
 }
 
@@ -994,14 +1014,6 @@ void MacWindowManager::draw() {
 		}
 	}
 
-	if (_menuTimer && g_system->getMillis() >= _menuTimer) {
-		if (_menuHotzone.contains(_lastMousePos)) {
-			activateMenu();
-		}
-
-		_menuTimer = 0;
-	}
-
 	// Menu is drawn on top of everything and always
 	if (_menu && !(_mode & kWMModeFullscreen)) {
 		if (_fullRefresh)
@@ -1043,6 +1055,14 @@ bool MacWindowManager::processEvent(Common::Event &event) {
 			if (!_menuTimer && _menuHotzone.contains(event.mouse)) {
 				_menuTimer = g_system->getMillis() + _menuDelay;
 			}
+		}
+
+		if (_menuTimer && g_system->getMillis() >= _menuTimer) {
+			if (_menuHotzone.contains(_lastMousePos)) {
+				activateMenu();
+			}
+
+			_menuTimer = 0;
 		}
 	}
 
@@ -1226,10 +1246,11 @@ void MacWindowManager::renderZoomBox(bool redraw) {
 }
 
 void MacWindowManager::zoomBoxInner(Common::Rect &r, Graphics::MacPlotData &pd) {
-	Graphics::drawLine(r.left,  r.top,    r.right, r.top,    0xff, getDrawPixel(), &pd);
-	Graphics::drawLine(r.right, r.top,    r.right, r.bottom, 0xff, getDrawPixel(), &pd);
-	Graphics::drawLine(r.left,  r.bottom, r.right, r.bottom, 0xff, getDrawPixel(), &pd);
-	Graphics::drawLine(r.left,  r.top,    r.left,  r.bottom, 0xff, getDrawPixel(), &pd);
+	Primitives &primitives = getDrawPrimitives();
+	primitives.drawHLine(r.left, r.right, r.top, 0xff, &pd);
+	primitives.drawVLine(r.right, r.top, r.bottom, 0xff, &pd);
+	primitives.drawHLine(r.left, r.right, r.bottom, 0xff, &pd);
+	primitives.drawVLine(r.left, r.top, r.bottom, 0xff, &pd);
 }
 
 /////////////////
@@ -1442,6 +1463,11 @@ void MacWindowManager::setEngine(Engine *engine) {
 void MacWindowManager::setEngineRedrawCallback(void *engine, void (*redrawCallback)(void *)) {
 	_engineR = engine;
 	_redrawEngineCallback = redrawCallback;
+}
+
+void MacWindowManager::setEngineActivateMenuCallback(void *engine, void (*activateMenuCallback)(void *)) {
+	_engineAM = engine;
+	_activateMenuCallback = activateMenuCallback;
 }
 
 void MacWindowManager::printWMMode(int debuglevel) {

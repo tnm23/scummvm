@@ -55,19 +55,20 @@ struct EventHandlerType {
 	{ kEventStepFrame,			"stepFrame"},
 	{ kEventExitFrame,			"exitFrame" },			//			D4
 
-	{ kEventActivateWindow,		"activateWindow" },
-	{ kEventDeactivateWindow,	"deactivateWindow" },
-	{ kEventMoveWindow,			"moveWindow" },
-	{ kEventResizeWindow,		"resizeWindow" },
-	{ kEventOpenWindow,			"openWindow" },
-	{ kEventCloseWindow,		"closeWindow" },
+	{ kEventActivateWindow,		"activateWindow" },		//				D5
+	{ kEventDeactivateWindow,	"deactivateWindow" },	//				D5
+	{ kEventMoveWindow,			"moveWindow" },			//				D5
+	{ kEventResizeWindow,		"resizeWindow" },		//				D5
+	{ kEventOpenWindow,			"openWindow" },			//				D5
+	{ kEventCloseWindow,		"closeWindow" },		//				D5
+	{ kEventZoomWindow,			"zoomWindow" },			//				D5
 
 	{ kEventKeyUp,				"keyUp" },				//			D4
 	{ kEventKeyDown,			"keyDown" },			// D2 w		D4 (as when from D2)
 	{ kEventMouseUp,			"mouseUp" },			// D2 w	D3
 	{ kEventMouseDown,			"mouseDown" },			// D2 w	D3
-	{ kEventRightMouseDown,		"rightMouseDown" },
-	{ kEventRightMouseUp,		"rightMouseUp" },
+	{ kEventRightMouseDown,		"rightMouseDown" },		//				D5
+	{ kEventRightMouseUp,		"rightMouseUp" },		//				D5
 	{ kEventMouseEnter,			"mouseEnter" },
 	{ kEventMouseLeave,			"mouseLeave" },
 	{ kEventMouseUpOutSide,		"mouseUpOutSide" },
@@ -326,12 +327,14 @@ void Movie::resolveScriptEvent(LingoEvent &event) {
 
 			// FIXME: shared cast movie scripts could come before main movie ones
 			// Movie scripts are fixed, so it's fine to look them up in advance.
-			LingoArchive *mainArchive = getMainLingoArch();
-			for (auto &it : mainArchive->scriptContexts[kMovieScript]) {
-				if (it._value->_eventHandlers.contains(event.event)) {
-					event.scriptType = kMovieScript;
-					event.scriptId = CastMemberID(it._key, DEFAULT_CAST_LIB);
-					return;
+			for (auto &cast : _casts) {
+				LingoArchive *archive = cast._value->_lingoArchive;
+				for (auto &it : archive->scriptContexts[kMovieScript]) {
+					if (it._value->_eventHandlers.contains(event.event)) {
+						event.scriptType = kMovieScript;
+						event.scriptId = CastMemberID(it._key, cast._key);
+						return;
+					}
 				}
 			}
 			LingoArchive *sharedArchive = getSharedLingoArch();

@@ -24,6 +24,7 @@
 #include "m4/riddle/vars.h"
 #include "m4/adv_r/adv_file.h"
 #include "m4/adv_r/other.h"
+#include "m4/riddle/riddle.h"
 
 namespace M4 {
 namespace Riddle {
@@ -48,7 +49,7 @@ void Room510::init() {
 		break;
 
 	case 1:
-		_statue = series_play("510 STATUE LAYED DOWN", 0xa00, 16, -1, 5);
+		_statue = series_play(" 510 STATUE LAYED DOWN", 0xa00, 16, -1, 5);
 		hotspot_set_active("ALTAR POST", false);
 		kernel_load_variant("510lock1");
 		break;
@@ -122,7 +123,7 @@ void Room510::init() {
 		_G(flags)[V292] = 0;
 	}
 
-	if (_G(game).previous_room != KERNEL_RESTORING_GAME) {
+	if (_G(game).previous_room == KERNEL_RESTORING_GAME) {
 		if (_G(flags)[V170]) {
 			ws_hide_walker();
 			_steps = series_play("RIP DANGLES FROM ROPE", 0x100, 16, -1, 5);
@@ -134,7 +135,7 @@ void Room510::init() {
 		player_set_commands_allowed(false);
 		_stepsSeries = series_load("510 UP STEPS");
 		_steps = series_play("510 UP STEPS", 0xf00, 0, 110, 5);
-		ws_demand_location(409, 86, 11);
+		ws_demand_location(_G(my_walker), 409, 86, 11);
 		ws_hide_walker();
 	}
 
@@ -145,8 +146,9 @@ void Room510::daemon() {
 	switch (_G(kernel).trigger) {
 	case 110:
 		terminateMachineAndNull(_steps);
+		ws_unhide_walker();
 		series_unload(_stepsSeries);
-		ws_walk(407, 97, nullptr, 999, 8);
+		ws_walk(_G(my_walker), 407, 97, nullptr, 999, 8);
 		break;
 
 	case 999:
@@ -162,9 +164,9 @@ void Room510::daemon() {
 }
 
 void Room510::pre_parser() {
-	bool lookFlag = player_said_any("look", "look at");
-	bool takeFlag = player_said("take");
-	bool useFlag = player_said("gear");
+	const bool lookFlag = player_said_any("look", "look at");
+	const bool takeFlag = player_said("take");
+	const bool useFlag = player_said("gear");
 
 	if (!useFlag && !lookFlag && !takeFlag)
 		return;
@@ -191,8 +193,6 @@ void Room510::pre_parser() {
 		if (lookFlag && player_said("TOWER"))
 			return;
 		if (lookFlag && player_said("SKULL"))
-			return;
-		if (!lookFlag && !takeFlag && !useFlag)
 			return;
 
 		if (player_said_any("ALTAR POST", "ALTAR POST ", "TROUGH", "STAIRS")) {
@@ -223,9 +223,9 @@ void Room510::pre_parser() {
 #define HAS(ITEM) (player_said(ITEM) && inv_player_has(ITEM))
 
 void Room510::parser() {
-	bool lookFlag = player_said_any("look", "look at");
-	bool takeFlag = player_said("take");
-	bool useFlag = player_said("gear");
+	const bool lookFlag = player_said_any("look", "look at");
+	const bool takeFlag = player_said("take");
+	const bool useFlag = player_said("gear");
 
 	if (lookFlag && player_said(" ")) {
 		digi_play("510R02", 1);
@@ -319,7 +319,7 @@ void Room510::parser() {
 			hotspot_set_active("NICHE", true);
 
 			if (inv_object_is_here("CRYSTAL SKULL")) {
-				kernel_examine_inventory_object("PING CRYSTAL SKULL", 5, 1, 330, 280, 2, 0, 2);
+				kernel_examine_inventory_object("PING CRYSTAL SKULL", 5, 1, 330, 280, 2, nullptr, 2);
 				inv_give_to_player("CRYSTAL SKULL");
 				terminateMachineAndNull(_skull);
 			}
@@ -358,12 +358,13 @@ void Room510::parser() {
 			}
 
 			ws_unhide_walker();
-			ws_demand_location(425, 128, 11);
+			ws_demand_location(_G(my_walker), 425, 128, 11);
 			kernel_timing_trigger(1, 6);
 			break;
 		case 6:
 			_G(flags)[V292] = 1;
 			series_unload(_ripStartsDownWall);
+			player_set_commands_allowed(true);
 			break;
 		case 7:
 			terminateMachineAndNull(_pu03);
@@ -372,7 +373,7 @@ void Room510::parser() {
 			break;
 		}
 	} else if (takeFlag && player_said_any("VINES ", "ROPE ", "GREEN VINE ", "BROWN VINE ")) {
-		if (!parserSub())
+		if (!useAltarPost())
 			return;
 	} else if (takeFlag && _G(flags)[V170] != 1 &&
 		player_said_any("VINES", "ROPE", "GREEN VINE", "BROWN VINE") && takeVinesRope()) {
@@ -381,7 +382,7 @@ void Room510::parser() {
 		switch (_G(kernel).trigger) {
 		case -1:
 			if (inv_object_is_here("WOODEN LADDER") && !_G(flags)[V169]) {
-				ws_walk(395, 121, nullptr, 1, 5);
+				ws_walk(_G(my_walker), 395, 121, nullptr, 1, 5);
 			}
 			break;
 		case 1:
@@ -492,16 +493,22 @@ void Room510::parser() {
 	} else if (useFlag && player_said_any("ALTAR POST", "ALTAR POST ")) {
 		switch (_G(kernel).trigger) {
 		case -1:
+		case 1:
+		case 2:
+		case 3:
 		case 4:
 		case 7:
+		case 8:
+		case 9:
+		case 10:
 		case 11:
 		case 666:
-			if (!parserSub())
+			if (!useAltarPost())
 				return;
 			break;
 
 		default:
-			return;
+			break;
 		}
 	} else if (player_said("WOODEN LADDER", "ALTAR") && inv_player_has("WOODEN LADDER")) {
 		if (_G(flags)[V169])
@@ -509,7 +516,7 @@ void Room510::parser() {
 
 		switch (_G(kernel).trigger) {
 		case -1:
-			ws_walk(395, 121, nullptr, 1, 7);
+			ws_walk(_G(my_walker), 395, 121, nullptr, 1, 7);
 			break;
 		case 1:
 			player_set_commands_allowed(false);
@@ -583,7 +590,7 @@ void Room510::parser() {
 				}
 
 				ws_unhide_walker();
-				ws_demand_location(425, 128, 11);
+				ws_demand_location(_G(my_walker), 425, 128, 11);
 				_G(flags)[V170] = 0;
 				player_set_commands_allowed(true);
 				break;
@@ -596,7 +603,7 @@ void Room510::parser() {
 		} else {
 			switch (_G(kernel).trigger) {
 			case -1:
-				ws_walk(425, 128, nullptr, 1, 11);
+				ws_walk(_G(my_walker), 425, 128, nullptr, 1, 11);
 				break;
 			case 1:
 				player_set_commands_allowed(false);
@@ -759,13 +766,13 @@ void Room510::parser() {
 		} else {
 			switch (_G(kernel).trigger) {
 			case -1:
-				ws_walk(407, 97, nullptr, 1, 10);
+				ws_walk(_G(my_walker), 407, 97, nullptr, 1, 10);
 				break;
 			case 1:
 				player_set_commands_allowed(false);
 
 				if (_flag1) {
-					sendWSMessage_multi(0);
+					sketchInJournal(nullptr);
 				} else {
 					digi_play("com028", 1, 255, 100);
 					_flag1 = true;
@@ -774,13 +781,14 @@ void Room510::parser() {
 			case 6:
 				_G(flags)[V089] = 1;
 				_G(flags)[kMocaMocheCartoon] = 1;
+				sketchInJournal(nullptr);
 				break;
 			case 100:
 				_G(kernel).trigger = -1;
-				sendWSMessage_multi(0);
+				sketchInJournal(nullptr);
 				break;
 			default:
-				sendWSMessage_multi(0);
+				sketchInJournal(nullptr);
 				break;
 			}
 		}
@@ -813,9 +821,166 @@ void Room510::parser() {
 	_G(player).command_ready = false;
 }
 
-bool Room510::parserSub() {
-	// TODO
-	return false;
+bool Room510::useAltarPost() {
+	switch (_G(kernel.trigger)) {
+	case -1:
+		ws_walk(_G(my_walker), 382, 111, nullptr, 666, 11);
+		break;
+
+	case 1:
+		ws_unhide_walker();
+		terminateMachineAndNull(_statue);
+
+		if (_G(flags)[V169] <= 0) {
+			_statue = series_play(" 510 STATUE LAYED DOWN", 0xa00, 16, -1, 5, 0, 100, 0, 0, 0, -1);
+			kernel_timing_trigger(1, 2, nullptr);
+			hotspot_set_active("ALTAR POST", false);
+			hotspot_set_active("ALTAR POST ", true);
+			kernel_load_variant("510lock1");
+		} else if (_G(flags)[V169] <= 2) {
+			_statue = series_play(" 510 STATUE", 0xa00, 16, -1, 5, 0, 100, 0, 0, 0, -1);
+			kernel_timing_trigger(1, 2);
+			hotspot_set_active("ALTAR POST", true);
+			hotspot_set_active("ALTAR POST ", false);
+			kernel_load_variant("510lock0");
+		}
+		break;
+
+	case 2:
+		switch (_G(flags)[V169]) {
+		case 0:
+			_G(flags)[V169] = 1;
+			player_set_commands_allowed(true);
+			break;
+
+		case 1:
+			kernel_timing_trigger(1, 4);
+			break;
+
+		case 2:
+			kernel_timing_trigger(1, 8);
+			break;
+
+		default:
+			break;
+		}
+		break;
+
+	case 3:
+		digi_play("510_s02", 2);
+		break;
+
+	case 4:
+		switch (_G(flags)[V169]) {
+		case 0:
+			player_set_commands_allowed(true);
+			break;
+
+		case 1:
+			_G(flags)[V169] = 0;
+			player_set_commands_allowed(true);
+
+			break;
+
+		case 2:
+			terminateMachineAndNull(_rope);
+
+			if (inv_object_is_here("ROPE")) {
+				inv_give_to_player("ROPE");
+				hotspot_set_active("ROPE ", false);
+			}
+
+			if (inv_object_is_here("GREEN VINE")) {
+				inv_give_to_player("GREEN VINE");
+				hotspot_set_active("GREEN VINE ", false);
+			}
+
+			if (inv_object_is_here("BROWN VINE")) {
+				inv_give_to_player("BROWN VINE");
+				hotspot_set_active("BROWN VINE ", false);
+			}
+
+			if (inv_object_is_here("VINES")) {
+				inv_give_to_player("VINES");
+				hotspot_set_active("VINES ", false);
+			}
+
+			sendWSMessage_140000(11);
+			break;
+
+		default:
+			break;
+		}
+		break;
+
+	case 7:
+		return false;
+
+	case 8:
+		_ripLowReach4 = series_load("RIP TREK LOW REACHER POS1");
+		kernel_timing_trigger(1, 9);
+		break;
+
+	case 9:
+		setGlobals1(_ripLowReach4, 1, 28, 28, 28);
+		sendWSMessage_110000(10);
+		break;
+
+	case 10:
+		terminateMachineAndNull(_rope);
+
+		if (inv_object_is_here("ROPE")) {
+			_rope = series_play("510 STATUE AND ROPE", 0xf00, 18, 4, 5);
+		}
+
+		if (inv_object_is_here("GREEN VINE") || inv_object_is_here("BROWN VINE")) {
+			_rope = series_play("510 STATUE AND ANY VINE", 0xf00, 18, 4, 5);
+		}
+
+		if (inv_object_is_here("VINES")) {
+			_rope = series_play("510 STATUE AND COMBO VINES", 0xf00, 18, 4, 5);
+		}
+		break;
+
+	case 11:
+		series_unload(_ripLowReach4);
+		_G(flags)[V169] = 0;
+		player_set_commands_allowed(true);
+		break;
+
+	case 666:
+		if (player_said("take")) {
+			if (player_said("VINES") && inv_player_has("VINES"))
+				return false;
+
+			if (player_said("ROPE") && inv_player_has("ROPE"))
+				return false;
+
+			if (player_said("GREEN VINE") && inv_player_has("GREEN VINE"))
+				return false;
+
+			if (player_said("BROWN VINE") && inv_player_has("BROWN VINE"))
+				return false;
+		}
+
+		player_set_commands_allowed(false);
+		kernel_timing_trigger(130, 3);
+		ws_hide_walker();
+
+		if (_G(flags)[V169] <= 0) {
+			terminateMachineAndNull(_statue);
+			_statue = series_play("510 RIP LOWERS STATUE", 0xa00, 16, 1, 5);
+		} else if (_G(flags)[V169] == 1) {
+			terminateMachineAndNull(_statue);
+			_statue = series_play("510 RIP LOWERS STATUE", 0xa00, 18, 1, 5);
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	return true;
 }
 
 bool Room510::takeVinesRope() {
@@ -828,7 +993,7 @@ bool Room510::takeVinesRope() {
 				return true;
 		}
 
-		ws_walk(395, 121, nullptr, 1, 5);
+		ws_walk(_G(my_walker), 395, 121, nullptr, 1, 5);
 		break;
 
 	case 1:
@@ -912,7 +1077,7 @@ void Room510::useVines() {
 	switch (_G(kernel).trigger) {
 	case -1:
 		other_save_game_for_resurrection();
-		ws_walk(425, 128, nullptr, 1, 11);
+		ws_walk(_G(my_walker), 425, 128, nullptr, 1, 11);
 		break;
 
 	case 1:
@@ -1037,7 +1202,7 @@ void Room510::woodenLadder() {
 void Room510::altar() {
 	switch (_G(kernel).trigger) {
 	case -1:
-		ws_walk(395, 121, nullptr, 1, 7);
+		ws_walk(_G(my_walker), 395, 121, nullptr, 1, 7);
 		break;
 
 	case 1:

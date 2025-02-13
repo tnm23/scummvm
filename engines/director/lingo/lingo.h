@@ -169,6 +169,7 @@ struct Datum {	/* interpreter stack type */
 	Common::String asString(bool printonly = false) const;
 	CastMemberID asMemberID(CastType castType = kCastTypeAny, int castLib = 0) const;
 	Common::Point asPoint() const;
+	Datum clone() const;
 
 	bool isRef() const;
 	bool isVarRef() const;
@@ -243,8 +244,8 @@ typedef Common::HashMap<Common::String, XLibCloserFunc, Common::IgnoreCase_Hash,
 typedef Common::HashMap<Common::String, ObjectType, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> OpenXLibsHash;
 typedef Common::HashMap<Common::String, AbstractObject *, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> OpenXLibsStateHash;
 
-typedef Common::HashMap<Common::String, TheEntity *, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> TheEntityHash;
-typedef Common::HashMap<Common::String, TheEntityField *, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> TheEntityFieldHash;
+typedef Common::HashMap<Common::String, const TheEntity *, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> TheEntityHash;
+typedef Common::HashMap<Common::String, const TheEntityField *, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> TheEntityFieldHash;
 
 struct CFrame {	/* proc/func call stack frame */
 	Symbol			sp;					/* symbol table entry */
@@ -334,6 +335,7 @@ struct LingoState {
 	ScriptContext *context = nullptr;		// current Lingo script context
 	DatumHash *localVars = nullptr;			// current local variables
 	Datum me;								// current me object
+	StackData stack;
 
 	~LingoState();
 };
@@ -356,8 +358,8 @@ public:
 	int getMenuNum();
 	int getMenuItemsNum(Datum &d);
 	int getXtrasNum();
-	int getCastlibsNum();
-	int getMembersNum();
+	int getCastLibsNum();
+	int getMembersNum(uint16 castLibID);
 
 	void executeHandler(const Common::String &name);
 	void executeScript(ScriptType type, CastMemberID id);
@@ -374,9 +376,9 @@ public:
 
 	void reloadBuiltIns();
 	void initBuiltIns();
-	void initBuiltIns(BuiltinProto protos[]);
+	void initBuiltIns(const BuiltinProto protos[]);
 	void cleanupBuiltIns();
-	void cleanupBuiltIns(BuiltinProto protos[]);
+	void cleanupBuiltIns(const BuiltinProto protos[]);
 	void initFuncs();
 	void cleanupFuncs();
 	void initBytecode();
@@ -417,6 +419,7 @@ public:
 	Common::U32String evalChunkRef(const Datum &var);
 	Datum findVarV4(int varType, const Datum &id);
 	CastMemberID resolveCastMember(const Datum &memberID, const Datum &castLib, CastType type);
+	CastMemberID toCastMemberID(const Datum &member, const Datum &castLib);
 	void exposeXObject(const char *name, Datum obj);
 
 	int getAlignedType(const Datum &d1, const Datum &d2, bool equality);
@@ -481,6 +484,8 @@ public:
 	void setTheSprite(Datum &id, int field, Datum &d);
 	Datum getTheCast(Datum &id, int field);
 	void setTheCast(Datum &id, int field, Datum &d);
+	Datum getTheCastLib(Datum &id, int field);
+	void setTheCastLib(Datum &id, int field, Datum &d);
 	Datum getTheField(Datum &id1, int field);
 	void setTheField(Datum &id1, int field, Datum &d);
 	Datum getTheChunk(Datum &chunk, int field);
@@ -541,12 +546,10 @@ public:
 
 	FuncHash _functions;
 
-	Common::HashMap<int, LingoV4Bytecode *> _lingoV4;
-	Common::HashMap<int, LingoV4TheEntity *> _lingoV4TheEntity;
+	Common::HashMap<int, const LingoV4Bytecode *> _lingoV4;
+	Common::HashMap<int, const LingoV4TheEntity *> _lingoV4TheEntity;
 
 	uint _globalCounter;
-
-	StackData _stack;
 
 	DirectorEngine *_vm;
 

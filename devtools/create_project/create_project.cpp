@@ -104,6 +104,9 @@ enum ProjectType {
 
 std::map<std::string, bool> isEngineEnabled;
 
+static void fixupFeatures(ProjectType projectType, BuildSetup &setup);
+static void fixupComponents(BuildSetup &setup);
+
 int main(int argc, char *argv[]) {
 #ifndef USE_WIN32_API
 	// Initialize random number generator for UUID creation
@@ -132,6 +135,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	setup.features = getAllFeatures();
+	setup.components = getAllComponents(setup.srcDir, setup.features);
 
 	ProjectType projectType = kProjectNone;
 	const MSVCVersion *msvc = nullptr;
@@ -317,13 +321,18 @@ int main(int argc, char *argv[]) {
 			std::string libsDir = unifyPath(argv[++i]);
 			removeTrailingSlash(libsDir);
 			setup.libsDir = libsDir;
+		} else if (!std::strcmp(argv[i], "--list-components")) {
+			for (ComponentList::const_iterator j = setup.components.begin(); j != setup.components.end(); ++j)
+				cout << ' ' << j->description << "\n";
+
+			return 0;
 		} else {
 			std::cerr << "ERROR: Unknown parameter \"" << argv[i] << "\"\n";
 			return -1;
 		}
 	}
 
-	// When building tests, disable some features
+	// When building tests, disable some features and all engines
 	if (setup.tests) {
 		setup.useStaticDetection = false;
 		setFeatureBuildState("mt32emu", setup.features, false);
@@ -339,52 +348,59 @@ int main(int argc, char *argv[]) {
 		setup.useStaticDetection = false;
 	}
 
-	// HACK: Vorbis and Tremor can not be enabled simultaneously
-	if (getFeatureBuildState("tremor", setup.features)) {
-		setFeatureBuildState("vorbis", setup.features, false);
-	}
+	fixupFeatures(projectType, setup);
 
-	// HACK: Fluidsynth and Fluidlite can not be enabled simultaneously
-	if (getFeatureBuildState("fluidsynth", setup.features)) {
-		setFeatureBuildState("fluidlite", setup.features, false);
-	}
-
-	// HACK: These features depend on OpenGL
-	if (!getFeatureBuildState("opengl", setup.features)) {
-		setFeatureBuildState("opengl_game_classic", setup.features, false);
-		setFeatureBuildState("opengl_game_shaders", setup.features, false);
-	}
-
-	// HACK: Check IMGUI dependencies
-	if (!getFeatureBuildState("opengl", setup.features) ||
-		!getFeatureBuildState("freetype2", setup.features) ||
-		!setup.useSDL2) {
-		std::cerr << "WARNING: imgui requires opengl, freetype2 and sdl2\n";
-		setFeatureBuildState("imgui", setup.features, false);
-	}
-	// HACK: IMGUI is not available on Xcode
-#ifdef ENABLE_XCODE
-	if (projectType == kProjectXcode) {
-		setFeatureBuildState("imgui", setup.features, false);
-	}
-#endif
-
-	// Disable engines for which we are missing dependencies
+	// Disable engines for which we are missing dependencies and mark components as needed
 	for (EngineDescList::const_iterator i = setup.engines.begin(); i != setup.engines.end(); ++i) {
-		if (i->enable) {
-			for (StringList::const_iterator ef = i->requiredFeatures.begin(); ef != i->requiredFeatures.end(); ++ef) {
-				FeatureList::iterator feature = std::find(setup.features.begin(), setup.features.end(), *ef);
-				if (feature == setup.features.end()) {
-					std::cerr << "ERROR: Missing feature " << *ef << " from engine " << i->name << '\n';
-					return -1;
-				} else if (!feature->enable) {
-					setEngineBuildState(i->name, setup.engines, false);
-					break;
-				}
+		if (!i->enable) {
+			continue;
+		}
+
+		bool enabled = true;
+		std::list<FeatureList::iterator> missingFeatures;
+		for (StringList::const_iterator ef = i->requiredFeatures.begin(); ef != i->requiredFeatures.end(); ++ef) {
+			FeatureList::iterator feature = std::find(setup.features.begin(), setup.features.end(), *ef);
+			if (feature == setup.features.end()) {
+				std::cerr << "ERROR: Missing feature " << *ef << " from engine " << i->name << '\n';
+				return -1;
+			} else if (!feature->enable) {
+				enabled = false;
+				missingFeatures.push_back(feature);
 			}
-			isEngineEnabled[i->name] = true;
+		}
+		isEngineEnabled[i->name] = enabled;
+		if (!enabled) {
+			setEngineBuildState(i->name, setup.engines, false);
+			std::cout << "WARNING: Disabling engine " << i->desc << " because the following dependencies are unmet:";
+			for (std::list<FeatureList::iterator>::iterator itr = missingFeatures.begin(); itr != missingFeatures.end(); itr++) {
+				std::cout << " " << (*itr)->description;
+			}
+			std::cout << "\n";
+			continue;
+		}
+		// Mark components as needed now the engine is definitely enabled
+		for (StringList::const_iterator ef = i->requiredFeatures.begin(); ef != i->requiredFeatures.end(); ++ef) {
+			ComponentList::iterator component = std::find(setup.components.begin(), setup.components.end(), *ef);
+			if (component == setup.components.end()) {
+				continue;
+			}
+			component->needed = true;
+		}
+		for (StringList::const_iterator ef = i->wishedComponents.begin(); ef != i->wishedComponents.end(); ++ef) {
+			ComponentList::iterator component = std::find(setup.components.begin(), setup.components.end(), *ef);
+			if (component == setup.components.end()) {
+				std::cerr << "ERROR: Missing component " << *ef << " from engine " << i->name << '\n';
+				return -1;
+			}
+			component->needed = true;
 		}
 	}
+
+	// Disable unused features / components
+	disableComponents(setup.components);
+
+	// Handle hard-coded component logic
+	fixupComponents(setup);
 
 	// Print status
 	cout << "Enabled engines:\n\n";
@@ -473,6 +489,12 @@ int main(int argc, char *argv[]) {
 
 	if (getFeatureBuildState("opengl", setup.features)) {
 		setup.defines.push_back("USE_GLAD");
+	}
+
+	// HACK: Add IMGUI SDL Renderer support
+	// This needs SDL 2.0.18+
+	if (getFeatureBuildState("imgui", setup.features)) {
+		setup.defines.push_back("USE_IMGUI_SDLRENDERER2");
 	}
 
 	// List of global warnings and map of project-specific warnings
@@ -985,7 +1007,7 @@ namespace {
  */
 bool parseEngine(const std::string &line, EngineDesc &engine) {
 	// Format:
-	// add_engine engine_name "Readable Description" enable_default ["SubEngineList"] ["base games"] ["dependencies"]
+	// add_engine engine_name "Readable Description" enable_default ["SubEngineList"] ["base games"] ["dependencies"] ["components"]
 	TokenList tokens = tokenize(line);
 
 	if (tokens.size() < 4)
@@ -1008,8 +1030,12 @@ bool parseEngine(const std::string &line, EngineDesc &engine) {
 		++token;
 		if (token != tokens.end())
 			++token;
-		if (token != tokens.end())
+		if (token != tokens.end()) {
 			engine.requiredFeatures = tokenize(*token);
+			++token;
+		}
+		if (token != tokens.end())
+			engine.wishedComponents = tokenize(*token);
 	}
 
 	return true;
@@ -1117,6 +1143,8 @@ const Feature s_features[] = {
 	{    "sdlnet",     "USE_SDL_NET", true, true,  "SDL_net support" },
 	{   "discord",     "USE_DISCORD", true, false, "Discord support" },
 	{ "retrowave",   "USE_RETROWAVE", true, false, "RetroWave OPL3 support" },
+	{       "a52",         "USE_A52", true, false, "ATSC A/52 support" },
+	{       "mpc",      "USE_MPCDEC", true, false, "Musepack support" },
 
 	// Feature flags
 	{               "bink",                      "USE_BINK", false, true,  "Bink video support" },
@@ -1125,12 +1153,10 @@ const Feature s_features[] = {
 	{        "edgescalers",              "USE_EDGE_SCALERS", false, true,  "Edge scalers" },
 	{             "aspect",                    "USE_ASPECT", false, true,  "Aspect ratio correction" },
 	{              "16bit",                 "USE_RGB_COLOR", false, true,  "16bit color support" },
+	{                 "3d",                              "", false, true,  "3D rendering" },
 	{            "highres",                   "USE_HIGHRES", false, true,  "high resolution" },
-	{              "imgui",                     "USE_IMGUI", false, true,  "Dear ImGui based debugger" },
 	{            "mt32emu",                   "USE_MT32EMU", false, true,  "integrated MT-32 emulator" },
-	{                "lua",                       "USE_LUA", false, true,  "lua" },
 	{               "nasm",                      "USE_NASM", false, true,  "IA-32 assembly support" }, // This feature is special in the regard, that it needs additional handling.
-	{             "tinygl",                    "USE_TINYGL", false, true,  "TinyGL support" },
 	{             "opengl",                    "USE_OPENGL", false, true,  "OpenGL support" },
 	{"opengl_game_classic",               "USE_OPENGL_GAME", false, true,  "OpenGL support (classic) in 3d games" },
 	{"opengl_game_shaders",            "USE_OPENGL_SHADERS", false, true,  "OpenGL support (shaders) in 3d games" },
@@ -1182,6 +1208,35 @@ const char *s_msvc_config_names[] = {"arm64", "Win32", "x64"};
 // clang-format on
 } // End of anonymous namespace
 
+// An array of buffers for the features
+// created out of the components (which use char pointers)
+std::list<std::string> s_stash_features;
+FeatureList::iterator addDynamicFeature(FeatureList &features, const std::string &name, const std::string &description, const std::string &define) {
+	// Add a new entry in our stash and fill it
+	s_stash_features.push_back(std::string());
+	std::string &buffer = s_stash_features.back();
+
+	buffer += name;
+	buffer += '\0';
+	buffer += define;
+	buffer += '\0';
+	buffer += description;
+
+	// Starting from now the buffer must be read-only
+
+	const char *ptr = buffer.c_str();
+	Feature feature = {
+		ptr,
+		ptr + name.size() + 1,
+		false,
+		true,
+		ptr + name.size() + define.size() + 2
+	};
+
+	features.push_back(feature);
+	return --features.end();
+}
+
 std::string getMSVCArchName(MSVC_Architecture arch) {
 	return s_msvc_arch_names[arch];
 }
@@ -1198,6 +1253,156 @@ FeatureList getAllFeatures() {
 		features.push_back(s_features[i]);
 
 	return features;
+}
+
+/**
+ * Apply all the hardcoded logic for the features availability.
+ *
+ * This means disabling conflicting features, enabling meta-features, ...
+ */
+static void fixupFeatures(ProjectType projectType, BuildSetup &setup) {
+	// Vorbis and Tremor can not be enabled simultaneously
+	if (getFeatureBuildState("tremor", setup.features)) {
+		setFeatureBuildState("vorbis", setup.features, false);
+	}
+
+	// Fluidsynth and Fluidlite can not be enabled simultaneously
+	if (getFeatureBuildState("fluidlite", setup.features)) {
+		setFeatureBuildState("fluidsynth", setup.features, false);
+	}
+
+	// OpenMPT and Mikmod can not be enabled simultaneously
+	if (getFeatureBuildState("openmpt", setup.features)) {
+		setFeatureBuildState("mikmod", setup.features, false);
+	}
+
+	// These features depend on OpenGL
+	if (!getFeatureBuildState("opengl", setup.features)) {
+		setFeatureBuildState("opengl_game_classic", setup.features, false);
+		setFeatureBuildState("opengl_game_shaders", setup.features, false);
+	}
+
+	// Check IMGUI dependencies
+	if (!getFeatureBuildState("opengl", setup.features) ||
+		!getFeatureBuildState("freetype2", setup.features) ||
+		!setup.useSDL2) {
+		std::cerr << "WARNING: imgui requires opengl, freetype2 and sdl2\n";
+		setFeatureBuildState("imgui", setup.features, false);
+	}
+	// IMGUI is not available on Xcode
+#ifdef ENABLE_XCODE
+	if (projectType == kProjectXcode) {
+		setFeatureBuildState("imgui", setup.features, false);
+	}
+#endif
+
+	// Calculate 3D feature state
+	setFeatureBuildState("3d", setup.features,
+			getFeatureBuildState("tinygl", setup.features) ||
+			getFeatureBuildState("opengl_game_classic", setup.features) ||
+			getFeatureBuildState("opengl_game_shaders", setup.features));
+
+}
+
+ComponentList getAllComponents(const std::string &srcDir, FeatureList &features) {
+	std::string configureFile = srcDir + "/configure";
+
+	std::ifstream configure(configureFile.c_str());
+	if (!configure)
+		return ComponentList();
+
+	std::string line;
+	ComponentList components;
+	bool seenComponents = false;
+
+	for (;;) {
+		std::getline(configure, line);
+		if (configure.eof())
+			break;
+
+		if (configure.fail())
+			error("Failed while reading from " + configureFile);
+
+		TokenList tokens = tokenize(line);
+
+		if (tokens.size() < 5)
+			continue;
+
+		TokenList::const_iterator token = tokens.begin();
+
+		// add_component lua "lua" "_lua" "USE_LUA"
+		if (*token != "add_component") {
+			if (seenComponents)	// No need to read whole file
+				break;
+			else
+				continue;
+		}
+
+		seenComponents = true;
+		++token;
+		std::string name = *token;
+		++token;
+		std::string description = *token;
+		++token;
+		++token;
+		std::string define = *token;
+
+		FeatureList::iterator itr = std::find(features.begin(), features.end(), name);
+		if (itr == features.end()) {
+			// Create a new feature on the fly
+			itr = addDynamicFeature(features, name, description, define);
+		}
+
+		Component comp = { name, define, *itr, description, false };
+		components.push_back(comp);
+	}
+
+	return components;
+}
+
+void disableComponents(const ComponentList &components) {
+	bool disabled = false;
+	for (ComponentList::const_iterator i = components.begin(); i != components.end(); ++i) {
+		if (!i->needed) {
+			i->feature.enable = false;
+			disabled = true;
+			std::cout << "Feature " << i->feature.description << " is disabled as unused by enabled engines\n";
+		}
+	}
+	if (disabled) {
+		std::cout << "\n";
+	}
+}
+
+/**
+ * Apply all the hardcoded logic for the meta-components.
+ *
+ * This means disabling features not needed because their matching meta-component
+ * is not needed either
+ */
+static void fixupComponents(BuildSetup &setup) {
+	bool disabled = false;
+
+	// No MIDI, disable all MIDI implementations
+	if (!getFeatureBuildState("midi", setup.features)) {
+		disabled = true;
+		std::cout << "Disabling mt32emu, fluidsynth and fluidlite because MIDI is unused by enabled engines\n";
+		setFeatureBuildState("mt32emu",    setup.features, false);
+		setFeatureBuildState("fluidsynth", setup.features, false);
+		setFeatureBuildState("fluidlite",  setup.features, false);
+	}
+
+	// Not any tracker, disable all tracker implementations
+	if (!getFeatureBuildState("universaltracker", setup.features)) {
+		disabled = true;
+		std::cout << "Disabling MikMod and OpenMPT because Universal Tracker playback is unused by enabled engines\n";
+		setFeatureBuildState("mikmod",  setup.features, false);
+		setFeatureBuildState("openmpt", setup.features, false);
+	}
+
+	if (disabled) {
+		std::cout << "\n";
+	}
 }
 
 StringList getFeatureDefines(const FeatureList &features) {
@@ -2496,10 +2701,10 @@ bool BuildSetup::featureEnabled(const std::string &feature) const {
 }
 
 Feature BuildSetup::getFeature(const std::string &feature) const {
-	for (FeatureList::const_iterator itr = features.begin(); itr != features.end(); ++itr) {
-		if (itr->name != feature)
-			continue;
-		return *itr;
+	FeatureList::const_iterator itr = std::find(features.begin(), features.end(), feature);
+	if (itr == features.end()) {
+		error("invalid feature request: " + feature);
 	}
-	error("invalid feature request: " + feature);
+
+	return *itr;
 }

@@ -69,17 +69,18 @@ public:
 
 enum TTMRunType {
 	kRunTypeStopped = 0,
-	kRunType1 = 1,
+	kRunTypeKeepGoing = 1,
 	kRunTypeMulti = 2,
 	kRunTypeTimeLimited = 3,
 	kRunTypeFinished = 4,
-	kRunType5 = 5,
+	kRunTypePaused = 5,
 };
 
 
 // Note: this object needs to be safely copy-able - ADS opcodes 0x4000 and 0x4010 require it.
 struct TTMSeq {
-	TTMSeq() : _enviro(0), _seqNum(0), _startFrame(0), _lastFrame(0), _timeCut(0) {
+	TTMSeq() : _enviro(0), _seqNum(0), _startFrame(0), _lastFrame(0), _timeCut(0),
+		_currentBmpId(0), _currentGetPutId(0) {
 		// Other members are initialized in the reset function.
 		reset();
 	}
@@ -117,21 +118,27 @@ struct TTMSeq {
 class TTMInterpreter {
 public:
 	TTMInterpreter(DgdsEngine *vm);
+	virtual ~TTMInterpreter() {};
 
 	bool load(const Common::String &filename, TTMEnviro &env);
 	void unload();
 	bool run(TTMEnviro &env, TTMSeq &seq);
-	void findAndAddSequences(TTMEnviro &scriptData, Common::Array<TTMSeq> &seqArray);
+	void findAndAddSequences(TTMEnviro &scriptData, Common::Array<Common::SharedPtr<TTMSeq>> &seqArray);
 
 	static Common::String readTTMStringVal(Common::SeekableReadStream *scr);
+	int32 findGOTOTarget(const TTMEnviro &env, const TTMSeq &seq, int16 frame);
 
 protected:
-	void handleOperation(TTMEnviro &env, TTMSeq &seq, uint16 op, byte count, const int16 *ivals, const Common::String &sval, const Common::Array<Common::Point> &pts);
-	int32 findGOTOTarget(TTMEnviro &env, TTMSeq &seq, int16 frame);
-	void doWipeOp(uint16 code, TTMEnviro &env, TTMSeq &seq, const Common::Rect &r);
-	int16 doOpInitCreditScroll(const Image *img);
-	bool doOpCreditsScroll(const Image *img, int16 ygap, int16 ymax, int16 xoff, int16 measuredWidth, const Common::Rect &clipRect);
-	void doDrawDialogForStrings(TTMEnviro &env, TTMSeq &seq, int16 x, int16 y, int16 width, int16 height);
+	virtual void handleOperation(TTMEnviro &env, TTMSeq &seq, uint16 op, byte count, const int16 *ivals, const Common::String &sval, const Common::Array<Common::Point> &pts);
+	void doWipeOp(uint16 code, const TTMEnviro &env, const TTMSeq &seq, const Common::Rect &r);
+	int16 doInitCreditScrollOp(const Image *img);
+	bool doCreditsScrollOp(const Image *img, int16 ygap, int16 ymax, int16 xoff, int16 measuredWidth, const Common::Rect &clipRect);
+	void doDrawDialogForStrings(const TTMEnviro &env, const TTMSeq &seq, int16 x, int16 y, int16 width, int16 height);
+	void doDrawSpriteOp(const TTMEnviro &env, const TTMSeq &seq, uint16 op, byte count, const int16 *ivals, int16 xoff = 0, int16 yoff = 0);
+	void doFadeOutOp(int16 colorno, int16 ncolors, int16 targetcol, int16 speed);
+	void doFadeInOp(int16 colorno, int16 ncolors, int16 targetcol, int16 speed);
+
+	static const char *ttmOpName(uint16 op);
 
 	DgdsEngine *_vm;
 	int _stackDepth;

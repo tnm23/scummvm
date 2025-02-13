@@ -27,8 +27,11 @@
 
 #include "testbed/testbed.h"
 #include "testbed/video.h"
+#include "graphics/cursorman.h"
 #include "graphics/paletteman.h"
 #include "gui/browser.h"
+
+#include "video/qt_data.h"
 
 namespace Testbed {
 
@@ -53,13 +56,17 @@ Common::Error Videotests::videoTest(const Common::FSNode &node) {
 }
 
 Common::Error Videotests::videoTest(Common::SeekableReadStream *stream, const Common::String &name) {
-	Video::VideoDecoder *video = new Video::QuickTimeDecoder();
+	Video::QuickTimeDecoder *video = new Video::QuickTimeDecoder();
 	if (!video->loadStream(stream)) {
 		warning("Cannot open video %s", name.c_str());
 		delete stream;
 		delete video;
 		return Common::kReadingFailed;
 	}
+
+	video->setTargetSize(400, 300);
+
+	warning("Video size: %d x %d", video->getWidth(), video->getHeight());
 
 	Common::List<Graphics::PixelFormat> supportedFormatsList = g_system->getSupportedFormats();
 	Graphics::PixelFormat pixelformat = supportedFormatsList.front();
@@ -76,7 +83,7 @@ Common::Error Videotests::videoTest(Common::SeekableReadStream *stream, const Co
 
 			if (!video->setOutputPixelFormat(pixelformat)) {
 				// TODO: Search for the pixel format in supportedFormatsList?
-				pixelformat = video->getPixelFormat();
+				warning("Format mismatch. Video will be converted");
 			}
 		}
 	}
@@ -99,25 +106,31 @@ Common::Error Videotests::videoTest(Common::SeekableReadStream *stream, const Co
 
 	video->start();
 
+	Common::Point mouse;
+
 	while (!video->endOfVideo()) {
 		if (video->needsUpdate()) {
 			uint32 pos = video->getTime();
 			debug(5, "video time: %d", pos);
 
 			if (pixelformat.isCLUT8() && video->hasDirtyPalette()) {
-				g_system->getPaletteManager()->setPalette(video->getPalette(), 0, 256);
+				g_system->getPaletteManager()->setPalette(Video::quickTimeDefaultPalette256, 0, 256);
 			}
 
 			const Graphics::Surface *frame = video->decodeNextFrame();
+			int x = 0, y = 0;
+			int mw = 0, mh = 0;
+
 			if (frame) {
 				const Graphics::Surface *surf = frame;
 				Graphics::Surface *conv = nullptr;
 
 				if (frame->format != pixelformat) {
-					surf = conv = frame->convertTo(pixelformat, video->getPalette());
+					surf = conv = frame->convertTo(pixelformat, Video::quickTimeDefaultPalette256);
 				}
 
-				int x = 0, y = 0;
+				mw = surf->w;
+				mh = surf->h;
 
 				if (surf->w < w && surf->h < h) {
 					x = (w - surf->w) >> 1;
@@ -134,18 +147,30 @@ Common::Error Videotests::videoTest(Common::SeekableReadStream *stream, const Co
 			Common::Event event;
 
 			while (g_system->getEventManager()->pollEvent(event)) {
-				switch (event.type) {
-				case Common::EVENT_LBUTTONDOWN:
-					((Video::QuickTimeDecoder *)video)->handleMouseButton(true, event.mouse.x, event.mouse.y);
-					break;
-				case Common::EVENT_LBUTTONUP:
-					((Video::QuickTimeDecoder *)video)->handleMouseButton(false);
-					break;
-				case Common::EVENT_MOUSEMOVE:
-					((Video::QuickTimeDecoder *)video)->handleMouseMove(event.mouse.x, event.mouse.y);
-					break;
-				default:
-					break;
+				if (Common::isMouseEvent(event))
+					mouse = event.mouse;
+
+				if (mouse.x >= x && mouse.x < x + mw &&
+						mouse.y >= y && mouse.y < y + mh) {
+					switch (event.type) {
+					case Common::EVENT_LBUTTONDOWN:
+						((Video::QuickTimeDecoder *)video)->handleMouseButton(true, event.mouse.x - x, event.mouse.y - y);
+						break;
+					case Common::EVENT_LBUTTONUP:
+						((Video::QuickTimeDecoder *)video)->handleMouseButton(false, event.mouse.x - x, event.mouse.y - y);
+						break;
+					case Common::EVENT_MOUSEMOVE:
+						((Video::QuickTimeDecoder *)video)->handleMouseMove(event.mouse.x - x, event.mouse.y - y);
+						break;
+					case Common::EVENT_KEYUP:
+					case Common::EVENT_KEYDOWN:
+						((Video::QuickTimeDecoder *)video)->handleKey(event.kbd, event.type == Common::EVENT_KEYDOWN);
+						break;
+					default:
+						break;
+					}
+				} else {
+					CursorMan.showMouse(false);
 				}
 
 				if (Engine::shouldQuit()) {

@@ -1,0 +1,459 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/config-manager.h"
+#include "engines/util.h"
+
+#include "mediastation/mediastation.h"
+#include "mediastation/debugchannels.h"
+#include "mediastation/detection.h"
+#include "mediastation/boot.h"
+#include "mediastation/context.h"
+#include "mediastation/asset.h"
+#include "mediastation/assets/hotspot.h"
+#include "mediastation/assets/movie.h"
+#include "mediastation/mediascript/scriptconstants.h"
+
+namespace MediaStation {
+
+MediaStationEngine *g_engine;
+
+MediaStationEngine::MediaStationEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
+	_gameDescription(gameDesc),
+	_randomSource("MediaStation") {
+	g_engine = this;
+	_mixer = g_system->getMixer();
+
+	_gameDataDir = Common::FSNode(ConfMan.getPath("path"));
+	SearchMan.addDirectory(_gameDataDir, 0, 3);
+	for (uint i = 0; MediaStation::directoryGlobs[i]; i++) {
+		Common::String directoryGlob = directoryGlobs[i];
+		SearchMan.addSubDirectoryMatching(_gameDataDir, directoryGlob, 0, 5);
+	}
+}
+
+MediaStationEngine::~MediaStationEngine() {
+	delete _screen;
+	_screen = nullptr;
+
+	delete _boot;
+	_boot = nullptr;
+
+	for (auto it = _loadedContexts.begin(); it != _loadedContexts.end(); ++it) {
+		delete it->_value;
+	}
+	_loadedContexts.clear();
+
+	for (auto it = _variables.begin(); it != _variables.end(); ++it) {
+		delete it->_value;
+	}
+	_variables.clear();
+}
+
+Asset *MediaStationEngine::getAssetById(uint assetId) {
+	for (auto it = _loadedContexts.begin(); it != _loadedContexts.end(); ++it) {
+		Asset *asset = it->_value->getAssetById(assetId);
+		if (asset != nullptr) {
+			return asset;
+		}
+	}
+	return nullptr;
+}
+
+Asset *MediaStationEngine::getAssetByChunkReference(uint chunkReference) {
+	for (auto it = _loadedContexts.begin(); it != _loadedContexts.end(); ++it) {
+		Asset *asset = it->_value->getAssetByChunkReference(chunkReference);
+		if (asset != nullptr) {
+			return asset;
+		}
+	}
+	return nullptr;
+}
+
+Function *MediaStationEngine::getFunctionById(uint functionId) {
+	for (auto it = _loadedContexts.begin(); it != _loadedContexts.end(); ++it) {
+		Function *function = it->_value->getFunctionById(functionId);
+		if (function != nullptr) {
+			return function;
+		}
+	}
+	return nullptr;
+}
+
+uint32 MediaStationEngine::getFeatures() const {
+	return _gameDescription->flags;
+}
+
+Common::String MediaStationEngine::getGameId() const {
+	return _gameDescription->gameId;
+}
+
+bool MediaStationEngine::isFirstGenerationEngine() {
+	if (_boot == nullptr) {
+		error("Attempted to get engine version before BOOT.STM was read");
+	} else {
+		return (_boot->_versionInfo == nullptr);
+	}
+}
+
+Common::Error MediaStationEngine::run() {
+	// INITIALIZE SUBSYSTEMS.
+	// All Media Station games run at 640x480.
+	initGraphics(SCREEN_WIDTH, SCREEN_HEIGHT);
+	_screen = new Graphics::Screen();
+	// TODO: Determine if all titles blank the screen to 0xff.
+	_screen->fillRect(Common::Rect(SCREEN_WIDTH, SCREEN_HEIGHT), 0xff);
+
+	// LOAD BOOT.STM.
+	Common::Path bootStmFilepath = Common::Path("BOOT.STM");
+	_boot = new Boot(bootStmFilepath);
+
+	// LOAD THE ROOT CONTEXT.
+	// This is because we might have assets that always need to be loaded.
+	//Context *root = nullptr;
+	uint32 rootContextId = _boot->getRootContextId();
+	if (rootContextId != 0) {
+		loadContext(rootContextId);
+	} else {
+		warning("MediaStation::run(): Title has no root context");
+	}
+
+	branchToScreen(_boot->_entryContextId);
+	while (true) {
+		processEvents();
+		if (shouldQuit()) {
+			break;
+		}
+
+		debugC(5, kDebugGraphics, "***** START SCREEN UPDATE ***");
+		for (auto it = _assetsPlaying.begin(); it != _assetsPlaying.end();) {
+			(*it)->process();
+			if (!(*it)->isActive()) {
+				it = _assetsPlaying.erase(it);
+			} else {
+				++it;
+			}
+		}
+		redraw();
+		debugC(5, kDebugGraphics, "***** END SCREEN UPDATE ***");
+
+		_screen->update();
+		g_system->delayMillis(10);
+	}
+
+	// CLEAN UP.
+	return Common::kNoError;
+}
+
+void MediaStationEngine::processEvents() {
+	while (g_system->getEventManager()->pollEvent(e)) {
+		debugC(9, kDebugEvents, "\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+		debugC(9, kDebugEvents, "@@@@   Processing events");
+		debugC(9, kDebugEvents, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n");
+
+		switch (e.type) {
+		case Common::EVENT_QUIT: {
+			// TODO: Do any necessary clean-up.
+			return;
+		}
+
+		case Common::EVENT_MOUSEMOVE: {
+			Asset *hotspot = findAssetToAcceptMouseEvents(e.mouse);
+			if (hotspot != nullptr) {
+				if (_currentHotspot == nullptr) {
+					_currentHotspot = hotspot;
+					debugC(5, kDebugEvents, "EVENT_MOUSEMOVE (%d, %d): Entered hotspot %d", e.mouse.x, e.mouse.y, hotspot->getHeader()->_id);
+					hotspot->runEventHandlerIfExists(kMouseEnteredEvent);
+				} else if (_currentHotspot == hotspot) {
+					// We are still in the same hotspot.
+				} else {
+					_currentHotspot->runEventHandlerIfExists(kMouseExitedEvent);
+					_currentHotspot = hotspot;
+					debugC(5, kDebugEvents, "EVENT_MOUSEMOVE (%d, %d): Exited hotspot %d", e.mouse.x, e.mouse.y, hotspot->getHeader()->_id);
+					hotspot->runEventHandlerIfExists(kMouseEnteredEvent);
+				}
+				debugC(5, kDebugEvents, "EVENT_MOUSEMOVE (%d, %d): Sent to hotspot %d", e.mouse.x, e.mouse.y, hotspot->getHeader()->_id);
+				hotspot->runEventHandlerIfExists(kMouseMovedEvent);
+			} else {
+				if (_currentHotspot != nullptr) {
+					_currentHotspot->runEventHandlerIfExists(kMouseExitedEvent);
+					debugC(5, kDebugEvents, "EVENT_MOUSEMOVE (%d, %d): Exited hotspot %d", e.mouse.x, e.mouse.y, _currentHotspot->getHeader()->_id);
+					_currentHotspot = nullptr;
+				}
+			}
+			break;
+		}
+
+		case Common::EVENT_KEYDOWN: {
+			// Even though this is a keydown event, we need to look at the mouse position.
+			Common::Point mousePos = g_system->getEventManager()->getMousePos();
+			Asset *hotspot = findAssetToAcceptMouseEvents(mousePos);
+			if (hotspot != nullptr) {
+				debugC(1, kDebugEvents, "EVENT_KEYDOWN (%d): Sent to hotspot %d", e.kbd.ascii, hotspot->getHeader()->_id);
+				hotspot->runKeyDownEventHandlerIfExists(e.kbd);
+			}
+			break;
+		}
+
+		case Common::EVENT_LBUTTONDOWN: {
+			Asset *hotspot = findAssetToAcceptMouseEvents(e.mouse);
+			if (hotspot != nullptr) {
+				debugC(1, kDebugEvents, "EVENT_LBUTTONDOWN (%d, %d): Sent to hotspot %d", e.mouse.x, e.mouse.y, hotspot->getHeader()->_id);
+				hotspot->runEventHandlerIfExists(kMouseDownEvent);
+			}
+			break;
+		}
+
+		case Common::EVENT_RBUTTONDOWN: {
+			// We are using the right button as a quick exit since the Media
+			// Station engine doesn't seem to use the right button itself.
+			warning("EVENT_RBUTTONDOWN: Quitting for development purposes");
+			quitGame();
+		}
+
+		default: {
+			break;
+		}
+		}
+	}
+}
+
+void MediaStationEngine::redraw() {
+	if (_dirtyRects.empty()) {
+		return;
+	}
+
+	Common::sort(_assetsPlaying.begin(), _assetsPlaying.end(), [](Asset * a, Asset * b) {
+		return a->zIndex() > b->zIndex();
+	});
+
+	for (Common::Rect dirtyRect : _dirtyRects) {
+		for (Asset *asset : _assetsPlaying) {
+			Common::Rect *bbox = asset->getBbox();
+			if (bbox != nullptr) {
+				if (dirtyRect.intersects(*bbox)) {
+					asset->redraw(dirtyRect);
+				}
+			}
+		}
+	}
+
+	_screen->update();
+	_dirtyRects.clear();
+}
+
+Context *MediaStationEngine::loadContext(uint32 contextId) {
+	if (_boot == nullptr) {
+		error("Cannot load contexts before BOOT.STM is read");
+	}
+
+	if (_loadedContexts.contains(contextId)) {
+		warning("MediaStationEngine::loadContext(): Context 0x%x already loaded, returning existing context", contextId);
+		return _loadedContexts.getVal(contextId);
+	}
+
+	// GET THE FILE ID.
+	SubfileDeclaration *subfileDeclaration = _boot->_subfileDeclarations.getValOrDefault(contextId);
+	if (subfileDeclaration == nullptr) {
+		warning("MediaStationEngine::loadContext(): Couldn't find subfile declaration with ID 0x%x", contextId);
+		return nullptr;
+	}
+	// The subfile declarations have other assets too, so we need to make sure
+	if (subfileDeclaration->_startOffsetInFile != 16) {
+		warning("MediaStationEngine::loadContext(): Requested ID wasn't for a context.");
+		return nullptr;
+	}
+	uint32 fileId = subfileDeclaration->_fileId;
+
+	// GET THE FILENAME.
+	FileDeclaration *fileDeclaration = _boot->_fileDeclarations.getValOrDefault(fileId);
+	if (fileDeclaration == nullptr) {
+		warning("MediaStationEngine::loadContext(): Couldn't find file declaration with ID 0x%x", fileId);
+		return nullptr;
+	}
+	Common::Path entryCxtFilepath(*fileDeclaration->_name);
+
+	// Load any child contexts before we actually load this one. The child
+	// contexts must be unloaded explicitly later.
+	ContextDeclaration *contextDeclaration = _boot->_contextDeclarations.getValOrDefault(contextId);
+	for (uint32 childContextId : contextDeclaration->_fileReferences) {
+		// The root context is referred to by an ID of 0, regardless of what its
+		// actual ID is. The root context is already always loaded.
+		if (childContextId != 0) {
+			debugC(5, kDebugLoading, "MediaStationEngine::loadContext(): Loading child context %d", childContextId);
+			loadContext(childContextId);
+		}
+	}
+	Context *context = new Context(entryCxtFilepath);
+
+	// Some contexts have a built-in palette that becomes active when the
+	// context is loaded, and some rely on scripts to set
+	// the palette later.
+	if (context->_palette != nullptr) {
+		_screen->setPalette(*context->_palette);
+	}
+
+	context->registerActiveAssets();
+	_loadedContexts.setVal(contextId, context);
+	return context;
+}
+
+void MediaStationEngine::setPalette(Asset *palette) {
+	assert(palette != nullptr);
+	setPaletteFromHeader(palette->getHeader());
+}
+
+void MediaStationEngine::setPaletteFromHeader(AssetHeader *header) {
+	assert(header != nullptr);
+	if (header->_palette != nullptr) {
+		_screen->setPalette(*header->_palette);
+	} else {
+		warning("MediaStationEngine::setPaletteFromHeader(): Asset %d does not have a palette. Current palette will be unchanged.", header->_id);
+	}
+}
+
+void MediaStationEngine::addPlayingAsset(Asset *assetToAdd) {
+	// If we're already marking the asset as played, we don't need to mark it
+	// played again.
+	for (Asset *asset : g_engine->_assetsPlaying) {
+		if (asset == assetToAdd) {
+			return;
+		}
+	}
+	g_engine->_assetsPlaying.push_back(assetToAdd);
+}
+
+Operand MediaStationEngine::callMethod(BuiltInMethod methodId, Common::Array<Operand> &args) {
+	switch (methodId) {
+	case kBranchToScreenMethod: {
+		assert(args.size() == 1);
+		uint32 contextId = args[0].getAssetId();
+		branchToScreen(contextId);
+		return Operand();
+	}
+
+	case kReleaseContextMethod: {
+		assert(args.size() == 1);
+		uint32 contextId = args[0].getAssetId();
+		releaseContext(contextId);
+		return Operand();
+	}
+
+	default: {
+		error("MediaStationEngine::callMethod(): Got unimplemented method ID %d", static_cast<uint>(methodId));
+	}
+	}
+}
+
+void MediaStationEngine::branchToScreen(uint32 contextId) {
+	if (_currentContext != nullptr) {
+		EventHandler *exitEvent = _currentContext->_screenAsset->_eventHandlers.getValOrDefault(kExitEvent);
+		if (exitEvent != nullptr) {
+			debugC(5, kDebugScript, "Executing context exit event handler");
+			exitEvent->execute(_currentContext->_screenAsset->_id);
+		} else {
+			debugC(5, kDebugScript, "No context exit event handler");
+		}
+	}
+
+	Context *context = loadContext(contextId);
+	_currentContext = context;
+	_dirtyRects.push_back(Common::Rect(SCREEN_WIDTH, SCREEN_HEIGHT));
+	_currentHotspot = nullptr;
+
+	if (context->_screenAsset != nullptr) {
+		// TODO: Make the screen an asset just like everything else so we can
+		// run event handlers with runEventHandlerIfExists.
+		EventHandler *entryEvent = context->_screenAsset->_eventHandlers.getValOrDefault(MediaStation::kEntryEvent);
+		if (entryEvent != nullptr) {
+			debugC(5, kDebugScript, "Executing context entry event handler");
+			entryEvent->execute(context->_screenAsset->_id);
+		} else {
+			debugC(5, kDebugScript, "No context entry event handler");
+		}
+	}
+}
+
+void MediaStationEngine::releaseContext(uint32 contextId) {
+	debugC(5, kDebugScript, "MediaStationEngine::releaseContext(): Releasing context %d", contextId);
+	Context *context = _loadedContexts.getValOrDefault(contextId);
+	if (context == nullptr) {
+		error("MediaStationEngine::releaseContext(): Attempted to unload context %d that is not currently loaded", contextId);
+	}
+
+	// Unload any assets currently playing from this context. They should have
+	// already been stopped by scripts, but this is a last check.
+	for (auto it = _assetsPlaying.begin(); it != _assetsPlaying.end();) {
+		uint assetId = (*it)->getHeader()->_id;
+		Asset *asset = context->getAssetById(assetId);
+		if (asset != nullptr) {
+			it = _assetsPlaying.erase(it);
+		} else {
+			++it;
+		}
+	}
+
+	delete context;
+	_loadedContexts.erase(contextId);
+}
+
+Asset *MediaStationEngine::findAssetToAcceptMouseEvents(Common::Point point) {
+	Asset *intersectingAsset = nullptr;
+	// The z-indices seem to be reversed, so the highest z-index number is
+	// actually the lowest asset.
+	int lowestZIndex = INT_MAX;
+
+	for (Asset *asset : _assetsPlaying) {
+		if (asset->type() == kAssetTypeHotspot) {
+			if (asset->isActive() && static_cast<Hotspot *>(asset)->isInside(point)) {
+				if (asset->zIndex() < lowestZIndex) {
+					lowestZIndex = asset->zIndex();
+					intersectingAsset = asset;
+				}
+			}
+		}
+	}
+	return intersectingAsset;
+}
+
+Operand MediaStationEngine::callBuiltInFunction(BuiltInFunction function, Common::Array<Operand> &args) {
+	switch (function) {
+	case kEffectTransitionFunction:
+	case kEffectTransitionOnSyncFunction: {
+		// TODO: effectTransitionOnSync should be split out into its own function.
+		effectTransition(args);
+		return Operand();
+	}
+
+	case kDrawingFunction: {
+		// Not entirely sure what this function does, but it seems like a way to
+		// call into some drawing functions built into the IBM/Crayola executable.
+		warning("MediaStationEngine::callBuiltInFunction(): Built-in drawing function not implemented");
+		return Operand();
+	}
+
+	default: {
+		error("MediaStationEngine::callBuiltInFunction(): Got unknown built-in function %s (%d)", builtInFunctionToStr(function), function);
+	}
+	}
+}
+
+} // End of namespace MediaStation

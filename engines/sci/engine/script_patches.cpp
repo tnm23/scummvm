@@ -29,6 +29,7 @@
 #include "sci/engine/guest_additions.h"
 #endif
 
+#include "common/config-manager.h"
 #include "common/util.h"
 
 namespace Sci {
@@ -106,6 +107,7 @@ static const char *const selectorNameTable[] = {
 	"type",         // system selector
 	"client",       // system selector
 	"state",        // system selector
+	"illegalBits",  // system selector
 	"localize",     // Freddy Pharkas
 	"roomFlags",    // Iceman
 	"put",          // Police Quest 1 VGA
@@ -249,6 +251,7 @@ enum ScriptPatcherSelectors {
 	SELECTOR_type,
 	SELECTOR_client,
 	SELECTOR_state,
+	SELECTOR_illegalBits,
 	SELECTOR_localize,
 	SELECTOR_roomFlags,
 	SELECTOR_put,
@@ -811,6 +814,44 @@ static const uint16 sciPatchTimerRollover[] = {
 	PATCH_END
 };
 
+// Several SCI Version 1 games use a Talker class that doesn't handle kGetTime
+//  rollover correctly. Talker:init calculates the message's end-time in ticks
+//  (1/60ths of a second) and Talker:doit compares this to the current time
+//  with a naive signed comparison. When kGetTime approaches $8000, the end-time
+//  appears negative and Talker:doit prematurely closes the message.
+//
+// We fix this by replacing the comparison with the correct logic from later
+//  versions. We restructure this to fit within the limited space:
+//
+//  Existing:    GetTime > ticks
+//  Correct:     GetTime - ticks > 0
+//  Optimized:   0 > ticks - GetTime
+//
+// Applies to: Castle of Dr. Brain, LSL5 PC English, SQ1
+// Responsible method: Talker:doit
+// Fixes bug: #15303
+static const uint16 sciSignatureTalkerRollover[] = {
+	0x76,                               // push0
+	SIG_MAGICDWORD,
+	0x43, 0x42, 0x00,                   // callk GetTime 00
+	0x36,                               // push
+	0x63, SIG_ADDTOOFFSET(+1),          // pToa ticks
+	0x1e,                               // gt? [ GetTime > ticks ]
+	0x30, SIG_ADDTOOFFSET(+1), 0x00,    // bnt
+	SIG_END
+};
+
+static const uint16 sciPatchTalkerRollover[] = {
+	0x76,                               // push0
+	0x67, PATCH_GETORIGINALBYTE(+6),    // pTos ticks
+	0x76,                               // push0
+	0x43, 0x42, 0x00,                   // callk GetTime 00
+	0x04,                               // sub [ ticks - GetTime ]
+	0x1e,                               // gt? [ 0 > ticks - GetTime ]
+	0x31, PATCH_GETORIGINALBYTE(+9),    // bnt
+	PATCH_END
+};
+
 // ===========================================================================
 // Conquests of Camelot
 // At the bazaar in Jerusalem, it's possible to see a girl taking a shower.
@@ -832,7 +873,7 @@ static const uint16 sciPatchTimerRollover[] = {
 // Responsible method: fawaz::handleEvent
 // Fixes bug: #6402
 static const uint16 camelotSignaturePeepingTom[] = {
-	0x72, SIG_MAGICDWORD, SIG_UINT16(0x077e), // lofsa fawaz <-- start of proper initializion code
+	0x72, SIG_MAGICDWORD, SIG_UINT16(0x077e), // lofsa fawaz <-- start of proper initialization code
 	0xa1, 0xb9,                      // sag global[b9h]
 	SIG_ADDTOOFFSET(+571),           // ...
 	0x39, 0x7a,                      // pushi 7a <-- initialization code when walking automatically
@@ -1279,6 +1320,8 @@ static const SciScriptPatcherEntry camelotSignatures[] = {
 //          script, description,                                      signature                                 patch
 static const SciScriptPatcherEntry castleBrainSignatures[] = {
 	{  true,   802, "disable speed test",                          1, sci01SpeedTestGlobalSignature,            sci01SpeedTestGlobalPatch },
+	{  true,   280, "talker rollover",                             1, sciSignatureTalkerRollover,               sciPatchTalkerRollover },
+	{  true,   928, "talker rollover",                             1, sciSignatureTalkerRollover,               sciPatchTalkerRollover },
 	SCI_SIGNATUREENTRY_TERMINATOR
 };
 
@@ -5297,6 +5340,53 @@ static const SciScriptPatcherEntry jonesSignatures[] = {
 // ===========================================================================
 // King's Quest 1
 
+// When swimming for too long in the cave pool beneath the well, the drowning
+//  script can get stuck and not display the death message. This occurs when ego
+//  is at certain x positions, such as 71. When sinking, the drowning script
+//  sets ego:illegalBits to 0 so that ego will fall without interference from
+//  priority lines. rm52:doit reverts this by setting ego:illegalBits to $8000
+//  because it thinks ego is swimming, causing ego to get stuck on a priority
+//  line when too far left. The script detects swimming by testing ego's view,
+//  but this is incomplete because view 6 also contains ego's drowning loops.
+//
+// We fix this by not setting ego:illegalBits to $8000 when the drowning script
+//  is running. The separate script for drowning while swimming underwater is
+//  unaffected, because it sets a timer to trigger its death message.
+//
+// Applies to: All versions
+// Responsible method: rm52:doit
+// Fixes bug: #15667
+static const uint16 kq1SignatureDrowning[] = {
+	0x72, SIG_ADDTOOFFSET(+2),          // lofsa drowning
+	SIG_ADDTOOFFSET(+61),
+	SIG_MAGICDWORD,
+	0x30, SIG_UINT16(0x000d),           // bnt 000d
+	0x39, SIG_SELECTOR8(illegalBits),   // pushi illegalBits
+	0x78,                               // push1
+	0x38, SIG_UINT16(0x8000),           // pushi 8000
+	0x81, 0x00,                         // lag 00
+	0x4a, 0x06,                         // send 06 [ ego illegalBits: $8000 ]
+	0x32, SIG_UINT16(0x0008),           // jmp 0008
+	0x39, SIG_SELECTOR8(illegalBits),   // pushi illegalBits
+	0x78,                               // push1
+	0x76,                               // push0 [ illegalBits: 0 ]
+	SIG_END
+};
+
+static const uint16 kq1PatchDrowning[] = {
+	PATCH_ADDTOOFFSET(+64),
+	0x72, PATCH_GETORIGINALUINT16ADJUST(1, -64), // lofsa drowning
+	0x67, 0x08,                         // pTos script
+	0x1c,                               // ne?  [ acc = 1 if not drowning, else 0 ]
+	0x36,                               // push
+	0x35, 0x0f,                         // ldi 0f
+	0x0e,                               // shl  [ acc = $8000 if not drowning, else 0 ]
+	0x33, 0x04,                         // jmp 04
+	PATCH_ADDTOOFFSET(+7),
+	0x36,                               // push [ illegalBits = $8000 or 0 ]
+	PATCH_END
+};
+
 // In the demo, the leprechaun dance runs awkwardly fast on modern computers.
 //  The demo script increases the speed from the default (5 or 6) to fastest (1)
 //  for this scene only. This appears to be an attempt to speed up the dance and
@@ -5325,6 +5415,7 @@ static const uint16 kq1PatchDemoDanceSpeed[] = {
 
 //          script, description,                                      signature                         patch
 static const SciScriptPatcherEntry kq1Signatures[] = {
+	{  true,    52, "drowning",                                    1, kq1SignatureDrowning,             kq1PatchDrowning },
 	{  true,    77, "demo: dance speed",                           1, kq1SignatureDemoDanceSpeed,       kq1PatchDemoDanceSpeed },
 	{  true,    99, "demo: disable speed test",                    1, sci01SpeedTestGlobalSignature,    sci01SpeedTestGlobalPatch },
 	{  true,   777, "disable speed test",                          1, sci01SpeedTestGlobalSignature,    sci01SpeedTestGlobalPatch },
@@ -5532,9 +5623,50 @@ static const uint16 kq4PatchUnicornNightRide[] = {
 	PATCH_END
 };
 
+// In Lolotte's bedroom, opening the door and exiting the room while she is
+//  alive leaves the game in a broken state. Upon returning, the door appears
+//  open but ego cannot walk through it and complete the game.
+//
+// We fix this by always initializing ego:illegalBits based on the door global.
+//  To make room for this patch, we overwrite the code that sets ego:baseSetter
+//  to zero. The previous room already sets this when changing rooms.
+//
+// This bug was caused by a fix for a minor bug. In early versions, the door was
+//  always closed prior to killing Lolotte, even if it had already been opened.
+//  The player just had to open it again. In later versions, code was added to
+//  handle this, but it initialized the door without also initializing ego.
+//
+// Applies to: PC 1.006.003, PC 1.006.004, Amiga
+// Responsible method: Room82:init
+// Fixes bug: #15471
+static const uint16 kq4SignatureLolotteDoor[] = {
+	SIG_MAGICDWORD,
+	0x38, SIG_UINT16(0x00d0),       // pushi baseSetter [ hard-coded for KQ4 late ]
+	0x78,                           // push1
+	0x76,                           // push0
+	SIG_ADDTOOFFSET(+5),
+	0x39, SIG_ADDTOOFFSET(+1),      // pushi illegalBits
+	0x78,                           // push1
+	0x38, SIG_UINT16(0xc000),       // pushi c000
+	SIG_ADDTOOFFSET(+10),
+	0x4a, 0x32,                     // send 32 [ ego ... baseSetter: 0 ... illegalBits: c000 ... ]
+	SIG_END
+};
+
+static const uint16 kq4PatchLolotteDoor[] = {
+	PATCH_GETORIGINALBYTES(5, +11),
+	0x80, PATCH_UINT16(0x00e3),      // lag 00e3 [ 1 if door open, 0 if closed ]
+	0x0e,                            // shl  [ acc = 8000 if door open, c000 if closed ]
+	0x36,                            // push [ ego:illegalBits = acc ]
+	PATCH_ADDTOOFFSET(+10),
+	0x4a, 0x2c,                      // send 2c [ ego ... illegalBits: 8000 or c000 ... ]
+	PATCH_END
+};
+
 //          script, description,                                      signature                                 patch
 static const SciScriptPatcherEntry kq4Signatures[] = {
 	{ false,    24, "missing waterfall view",                      1, kq4SignatureMissingWaterfallView,         kq4PatchMissingWaterfallView },
+	{  true,    82, "lolotte door",                                1, kq4SignatureLolotteDoor,                  kq4PatchLolotteDoor },
 	{  true,    90, "fall down stairs",                            1, kq4SignatureFallDownStairs,               kq4PatchFallDownStairs },
 	{  true,    98, "disable speed test",                          1, sci0EarlySpeedTestSignature,              sci0EarlySpeedTestPatch },
 	{  true,    98, "fix speed test overflow",                     1, sci0SpeedTestOverflowSignature,           sci0SpeedTestOverflowPatch },
@@ -5548,7 +5680,7 @@ static const SciScriptPatcherEntry kq4Signatures[] = {
 
 // ===========================================================================
 // At least during the harpy scene, export 29 of script 0 is called and has an
-//  issue where temp[3] won't get inititialized, but is later used to set
+//  issue where temp[3] won't get initialized, but is later used to set
 //  master volume. This makes SSCI set the volume to max. We fix the procedure,
 //  so volume won't get modified in those cases.
 //
@@ -5806,10 +5938,48 @@ static const uint16 kq5PatchSinkingBoatPosition[] = {
 	PATCH_END
 };
 
+// In the mountains when jumping on the steps, KQ5 CD has a script that is
+//  incompatible with digital samples within sound resources. When ego jumps on
+//  a step and it falls, the death dialog never appears and the game is frozen
+/// in hands-off mode. The `jumping` script plays the sound of the step falling
+//  (SOUND 790) and the audio of Graham yelling (AUDIO 7053) and then waits on
+//  both to complete. If both are digital samples, then Graham interrupts the
+//  step sound and the script does not complete.
+//
+// This was not an issue in the original, because KQ5 CD introduced a separate
+//  audio driver for playing digital samples from audio resources, and the sound
+//  driver skipped digital samples in sound resources. In our interpreter,
+//  digital samples are always played when "prefer_digitalsfx" is enabled.
+//
+// We work around this by patching jumping:changeState when "prefer_digitalsfx"
+//  is enabled. We do this by patching the empty state where the script would be
+//  stuck to instead fall through to the next state.
+//
+// Applies to: PC CD
+// Responsible method: jumping:changeState(9)
+// Fixes bug: #15550
+static const uint16 kq5SignatureCdFallingSound[] = {
+	SIG_MAGICDWORD,
+	0x3c,                            // dup
+	0x35, 0x09,                      // ldi 09
+	0x1a,                            // eq? [ state == 9 ]
+	0x30, SIG_UINT16(0x0003),        // bnt 0003
+	0x32,                            // jmp [ end of switch ]
+	SIG_END
+};
+
+static const uint16 kq5PatchCdFallingSound[] = {
+	PATCH_ADDTOOFFSET(+7),
+	0x3a,                            // toss        [ toss old state ]
+	0x6f, 0x0a,                      // ipTos state [ increment state ]
+	PATCH_END
+};
+
 //          script, description,                                      signature                  patch
 static const SciScriptPatcherEntry kq5Signatures[] = {
 	{  true,     0, "CD: harpy volume change",                     1, kq5SignatureCdHarpyVolume,            kq5PatchCdHarpyVolume },
 	{  true,     0, "timer rollover",                              1, sciSignatureTimerRollover,            sciPatchTimerRollover },
+	{ false,    31, "CD: falling sound",                           1, kq5SignatureCdFallingSound,           kq5PatchCdFallingSound },
 	{  true,    47, "sinking boat position",                       1, kq5SignatureSinkingBoatPosition,      kq5PatchSinkingBoatPosition },
 	{  true,    99, "disable speed test",                          1, sci01SpeedTestLocalSignature,         sci01SpeedTestLocalPatch },
 	{  true,    99, "disable speed test",                          1, sci11SpeedTestSignature,              sci11SpeedTestPatch },
@@ -8990,9 +9160,49 @@ static const uint16 larry1PatchBuyApple[] = {
 	PATCH_END
 };
 
+// When entering the casino from certain angles and speeds, ego can get stuck in
+//  hands-off mode when the doors close. This bug also occurs in the original.
+//  The sToCasino script sets hands-off mode, moves ego, closes the doors, and
+//  then waits on ego and the doors, but the doors are control obstacles that
+//  can interrupt ego's motion and prevent the script from completing.
+//
+// We fix this by clearing ego:illegalBits when sToCasino enters hands-off mode
+//  so that ego ignores the door obstacles. On the final state (2) we restore
+//  ego:illegalBits to $8000 before changing rooms.
+//
+// Applies to: All versions
+// Responsible method: sToCasino:changeState
+// Fixes bug: #15701
+static const uint16 larry1SignatureCasinoDoors[] = {
+	0x32, SIG_ADDTOOFFSET(+2),         // jmp [ end of switch ]
+	0x3c,                              // dup
+	0x35, SIG_MAGICDWORD, 0x01,        // ldi 01 [ state 1 ]
+	0x1a,                              // eq?
+	0x30, SIG_UINT16(0x0005),          // bnt 0005
+	0x35, 0x00,                        // ldi 00
+	0x32,                              // jmp [ end of switch ]
+	SIG_ADDTOOFFSET(+9),
+	0x38, SIG_SELECTOR16(newRoom),     // pushi newRoom
+	SIG_END
+};
+
+static const uint16 larry1PatchCasinoDoors[] = {
+	0x32, PATCH_UINT16(0x0000),        // jmp 0000 [ fall through ]
+	0x3c,                              // dup
+	0x35, 0x0e,                        // ldi 0e
+	0x0e,                              // shl
+	0x39, PATCH_SELECTOR8(illegalBits),// pushi illegalBits
+	0x78,                              // push1
+	0x36,                              // push
+	0x81, 0x00,                        // lag 00
+	0x4a, 0x06,                        // send 06 [ ego illegalBits: (state << 14) ]
+	PATCH_END
+};
+
 //          script, description,                                signature                       patch
 static const SciScriptPatcherEntry larry1Signatures[] = {
 	{  true,   300, "Spanish: buy apple from barrel man",    1, larry1SignatureBuyApple,        larry1PatchBuyApple },
+	{  true,   300, "casino doors",                          1, larry1SignatureCasinoDoors,     larry1PatchCasinoDoors },
 	{  true,   350, "elevator polygon size",                 1, larry1SignatureElevatorPolygon, larry1PatchElevatorPolygon },
 	{  true,   803, "disable speed test",                    1, sci01SpeedTestLocalSignature,   sci01SpeedTestLocalPatch },
 	SCI_SIGNATUREENTRY_TERMINATOR
@@ -9395,6 +9605,7 @@ static const SciScriptPatcherEntry larry5Signatures[] = {
 	{  true,   280, "English-only: fix green card limo bug",       1, larry5SignatureGreenCardLimoBug,        larry5PatchGreenCardLimoBug },
 	{  true,   380, "German-only: Enlarge Patti Textbox",          1, larry5SignatureGermanEndingPattiTalker, larry5PatchGermanEndingPattiTalker },
 	{  true,   500, "speed up palette animation",                  1, larry5SignatureRoom500PaletteAnimation, larry5PatchRoom500PaletteAnimation },
+	{  true,   928, "talker rollover",                             1, sciSignatureTalkerRollover,             sciPatchTalkerRollover },
 	SCI_SIGNATUREENTRY_TERMINATOR
 };
 
@@ -21111,7 +21322,7 @@ static const uint16 qfg4DeathScreenKeyboardPatch[] = {
 //  These scripts also prevent the player from throwing their last dagger with a
 //  message, but they repeat the check after removing the item from inventory
 //  and make a broken call to gloryMessgaer:say within a handsOff script. This
-//  redunant check wouldn't have any effect if it weren't for the first bug.
+//  redundant check wouldn't have any effect if it weren't for the first bug.
 //
 // We fix this by patching out all of the hero:use calls that consume daggers or
 //  rocks in the rooms with this bug. There are several forms of these scripts,
@@ -24073,6 +24284,7 @@ static const SciScriptPatcherEntry sq1vgaSignatures[] = {
 	{  true,   703, "deltaur messages",                            1, sq1vgaSignatureDeltaurMessages3,            sq1vgaPatchDeltaurMessages },
 	{  true,   704, "spider droid timing issue",                   1, sq1vgaSignatureSpiderDroidTiming,           sq1vgaPatchSpiderDroidTiming },
 	{  true,   803, "disable speed test",                          1, sci01SpeedTestLocalSignature,               sci01SpeedTestLocalPatch },
+	{  true,   928, "talker rollover",                             1, sciSignatureTalkerRollover,                 sciPatchTalkerRollover },
 	{  true,   989, "rename russian Sound class",                  1, sq1vgaSignatureRussianSoundName,            sq1vgaPatchRussianSoundName },
 	{  true,   992, "rename russian Motion class",                 1, sq1vgaSignatureRussianMotionName,           sq1vgaPatchRussianMotionName },
 	{  true,   994, "rename russian Rm class",                     1, sq1vgaSignatureRussianRmName,               sq1vgaPatchRussianRmName },
@@ -26289,6 +26501,13 @@ void ScriptPatcher::processScript(uint16 scriptNr, SciSpan<byte> scriptData) {
 					g_sci->getPlatform() == Common::kPlatformMacintosh ||
 					(g_sci->getPlatform() == Common::kPlatformAmiga && g_sci->getLanguage() == Common::EN_ANY)) {
 					enablePatch(signatureTable, "Crispin intro signal");
+				}
+				// enable a patch to fix a script incompatibility when we
+				//  play sounds that did not play in the original.
+				if (g_sci->isCD() &&
+					g_sci->getPlatform() != Common::kPlatformFMTowns &&
+					ConfMan.getBool("prefer_digitalsfx")) {
+					enablePatch(signatureTable, "CD: falling sound");
 				}
 				break;
 			case GID_KQ6:

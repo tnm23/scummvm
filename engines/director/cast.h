@@ -84,13 +84,15 @@ struct TilePatternEntry {
 
 class Cast {
 public:
-	Cast(Movie *movie, uint16 castLibID, bool isShared = false, bool isExternal = false);
+	Cast(Movie *movie, uint16 castLibID, bool isShared = false, bool isExternal = false, uint16 libResourceId = 1024);
 	~Cast();
 
 	void loadArchive();
 	void setArchive(Archive *archive);
 	Archive *getArchive() const { return _castArchive; };
 	Common::String getMacName() const { return _macName; }
+	Common::String getCastName() const { return _castName; }
+	void setCastName(const Common::String &name) { _castName = name; }
 
 	bool loadConfig();
 	void loadCast();
@@ -145,6 +147,7 @@ public:
 	uint16 _version;
 	Common::Platform _platform;
 	uint16 _castLibID;
+	uint16 _libResourceId;
 	bool _isExternal;
 
 	CharMap _macCharsToWin;
@@ -184,6 +187,7 @@ private:
 	Common::Array<CastMember *> _loadQueue;
 
 	Common::String _macName;
+	Common::String _castName;
 
 	Common::HashMap<uint16, CastMemberInfo *> _castsInfo;
 	Common::HashMap<Common::String, int, Common::IgnoreCase_Hash, Common::IgnoreCase_EqualTo> _castsNames;

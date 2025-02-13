@@ -11,7 +11,7 @@ FASTCALL=false
 
 export ASFLAGS="-m68030"
 export CXXFLAGS="-m68030 -DDISABLE_FANCY_THEMES"
-export LDFLAGS="-m68030 -Wl,--msuper-memory"
+export LDFLAGS="-m68030"
 export PKG_CONFIG_LIBDIR="$(${PLATFORM}-gcc -print-sysroot)/usr/lib/m68020-60/pkgconfig"
 
 if $FASTCALL
@@ -63,8 +63,8 @@ cp ../backends/platform/atari/readme.txt dist-generic/scummvm
 unix2dos dist-generic/scummvm/readme.txt
 
 cd dist-generic
-mv scummvm scummvm-2.9.0-atari-lite
-zip -r -9 scummvm-2.9.0-atari-lite.zip scummvm-2.9.0-atari-lite
+mv scummvm scummvm-2.10.0git-atari-lite
+zip -r -9 scummvm-2.10.0git-atari-lite.zip scummvm-2.10.0git-atari-lite
 cd -
 
-mv dist-generic/scummvm-2.9.0-atari-lite.zip ..
+mv dist-generic/scummvm-2.10.0git-atari-lite.zip ..

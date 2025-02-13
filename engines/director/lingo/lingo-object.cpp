@@ -104,7 +104,6 @@
 #include "director/lingo/xlibs/panel.h"
 #include "director/lingo/xlibs/popupmenuxobj.h"
 #include "director/lingo/xlibs/porta.h"
-#include "director/lingo/xlibs/portaxcmd.h"
 #include "director/lingo/xlibs/prefpath.h"
 #include "director/lingo/xlibs/printomatic.h"
 #include "director/lingo/xlibs/processxobj.h"
@@ -119,6 +118,7 @@
 #include "director/lingo/xlibs/spacemgr.h"
 #include "director/lingo/xlibs/stagetc.h"
 #include "director/lingo/xlibs/syscolor.h"
+#include "director/lingo/xlibs/tengu.h"
 #include "director/lingo/xlibs/unittest.h"
 #include "director/lingo/xlibs/valkyrie.h"
 #include "director/lingo/xlibs/videodiscxobj.h"
@@ -135,14 +135,16 @@
 #include "director/lingo/xlibs/xwin.h"
 #include "director/lingo/xlibs/yasix.h"
 #include "director/lingo/xtras/directsound.h"
+#include "director/lingo/xtras/filextra.h"
 #include "director/lingo/xtras/keypoll.h"
 #include "director/lingo/xtras/qtvrxtra.h"
 #include "director/lingo/xtras/scrnutil.h"
 #include "director/lingo/xtras/timextra.h"
+#include "director/lingo/xtras/xsound.h"
 
 namespace Director {
 
-static struct PredefinedProto {
+static const struct PredefinedProto {
 	const char *name;
 	void (*func)(int);
 	int minArgs;	// -1 -- arglist
@@ -170,7 +172,7 @@ static struct PredefinedProto {
 	{ nullptr, nullptr, 0, 0, 0, 0 }
 };
 
-static MethodProto windowMethods[] = {
+static const MethodProto windowMethods[] = {
 	// window / stage
 	{ "close",					LM::m_close,				 0, 0,	400 },			// D4
 	{ "forget",					LM::m_forget,				 0, 0,	400 },			// D4
@@ -181,7 +183,7 @@ static MethodProto windowMethods[] = {
 };
 
 void Lingo::initMethods() {
-	for (PredefinedProto *mtd = predefinedMethods; mtd->name; mtd++) {
+	for (const PredefinedProto *mtd = predefinedMethods; mtd->name; mtd++) {
 		if (mtd->version > _vm->getVersion())
 			continue;
 
@@ -205,7 +207,7 @@ void Lingo::cleanupMethods() {
 #define XLIBDEF(class, flags, version) \
 	{ class::fileNames, class::open, class::close, flags, version }
 
-static struct XLibProto {
+static const struct XLibProto {
 	const XlibFileDesc *names;
 	XLibOpenerFunc opener;
 	XLibCloserFunc closer;
@@ -247,6 +249,7 @@ static struct XLibProto {
 	XLIBDEF(FadeGammaXCMD,		kXObj,			400),	// D4
 	XLIBDEF(FileExists,			kXObj,			300),	// D3
 	XLIBDEF(FileIO,				kXObj | kXtraObj,200),	// D2
+	XLIBDEF(FileXtra,			kXtraObj,					500),	// D5
 	XLIBDEF(FindFolder,			kXObj,			300),	// D3
 	XLIBDEF(FindSys,			kXObj,			400),	// D4
 	XLIBDEF(FindWin,			kXObj,			400),	// D4
@@ -276,7 +279,6 @@ static struct XLibProto {
 	XLIBDEF(MiscX,				kXObj,			400),	// D4
 	XLIBDEF(MMaskXObj,			kXObj,			400),	// D4
 	XLIBDEF(MoovXObj,			kXObj,			300),	// D3
-	XLIBDEF(MovUtilsXObj,		kXObj,			400),	// D4
 	XLIBDEF(MoveMouseJPXObj,			kXObj,					400),	// D4
 	XLIBDEF(MoveMouseXObj,		kXObj,			400),	// D4
 	XLIBDEF(MovieIdxXObj,		kXObj,			400),	// D4
@@ -289,9 +291,8 @@ static struct XLibProto {
 	XLIBDEF(PanelXObj,			kXObj,			200),	// D2
 	XLIBDEF(PopUpMenuXObj,		kXObj,			200),	// D2
 	XLIBDEF(Porta,				kXObj,			300),	// D3
-	XLIBDEF(PortaXCMD,			kXObj,			300),	// D3
 	XLIBDEF(PrefPath,			kXObj,			400),	// D4
-	XLIBDEF(PrintOMaticXObj,	kXObj,			400),	// D4
+	XLIBDEF(PrintOMaticXObj,	kXObj | kXtraObj,400),	// D4
 	XLIBDEF(ProcessXObj,		kXObj,			400),	// D4
 	XLIBDEF(QTCatMoviePlayerXObj,kXObj,			400),	// D4
 	XLIBDEF(QTMovie,			kXObj,			400),	// D4
@@ -307,6 +308,7 @@ static struct XLibProto {
 	XLIBDEF(SpaceMgr,			kXObj,			400),	// D4
 	XLIBDEF(StageTCXObj,		kXObj,			400),	// D4
 	XLIBDEF(SysColorXObj,			kXObj,					400),	// D4
+	XLIBDEF(TenguXObj,			kXObj,					400),	// D4
 	XLIBDEF(TimextraXtra,		kXtraObj,		500),	// D5
 	XLIBDEF(UnitTestXObj,		kXObj,			400),	// D4
 	XLIBDEF(VMisOnXFCN,			kXObj,			400),	// D4
@@ -321,12 +323,13 @@ static struct XLibProto {
 	XLIBDEF(XWINXObj,			kXObj,			300),	// D3
 	XLIBDEF(XioXObj,			kXObj,			400),	// D3
 	XLIBDEF(XPlayAnim,			kXObj,			300),	// D3
+	XLIBDEF(XsoundXtra,			kXtraObj,					500),	// D5
 	XLIBDEF(Yasix,				kXObj,			300),	// D3
 	{ nullptr, nullptr, nullptr, 0, 0 }
 };
 
 void Lingo::initXLibs() {
-	for (XLibProto *lib = xlibs; lib->names; lib++) {
+	for (const XLibProto *lib = xlibs; lib->names; lib++) {
 		if (lib->version > _vm->getVersion())
 			continue;
 
@@ -437,8 +440,8 @@ void LM::m_dispose(int nargs) {
 
 /* ScriptContext */
 
-ScriptContext::ScriptContext(Common::String name, ScriptType type, int id)
-	: Object<ScriptContext>(name), _scriptType(type), _id(id) {
+ScriptContext::ScriptContext(Common::String name, ScriptType type, int id, uint16 castLibHint)
+	: Object<ScriptContext>(name), _scriptType(type), _id(id), _castLibHint(castLibHint) {
 	_objType = kScriptObj;
 }
 
@@ -458,6 +461,7 @@ ScriptContext::ScriptContext(const ScriptContext &sc) : Object<ScriptContext>(sc
 	_propertyNames = sc._propertyNames;
 
 	_id = sc._id;
+	_castLibHint = sc._castLibHint;
 }
 
 ScriptContext::~ScriptContext() {
@@ -633,10 +637,10 @@ void LM::m_perform(int nargs) {
 	// mNew is called with mPerform
 	Datum d(g_lingo->_state->me);
 	AbstractObject *me = d.u.obj;
-	Datum methodName = g_lingo->_stack.remove_at(g_lingo->_stack.size() - nargs); // Take method name out of stack
+	Datum methodName = g_lingo->_state->stack.remove_at(g_lingo->_state->stack.size() - nargs); // Take method name out of stack
 	Symbol funcSym = me->getMethod(*methodName.u.s);
 	// Object methods expect the first argument to be the object
-	g_lingo->_stack.insert_at(g_lingo->_stack.size() - nargs + 1, d);
+	g_lingo->_state->stack.insert_at(g_lingo->_state->stack.size() - nargs + 1, d);
 	LC::call(funcSym, nargs, allowRetVal);
 
 	if (allowRetVal) {
@@ -828,7 +832,7 @@ void LM::m_forget(int nargs) {
 		if (it._value.u.obj == me)
 			g_lingo->_globalvars[it._key] = 0;
 	}
-
+	g_director->forgetWindow(me);
 }
 
 void LM::m_open(int nargs) {

@@ -39,18 +39,10 @@ extern const char *holomapKeyMapId;
 
 enum TwinEActionType {
 	Pause,
-	NextRoom,
-	PreviousRoom,
-	ApplyCellingGrid,
-	IncreaseCellingGridIndex,
-	DecreaseCellingGridIndex,
 	DebugGridCameraPressUp,
 	DebugGridCameraPressDown,
 	DebugGridCameraPressLeft,
 	DebugGridCameraPressRight,
-	DebugPlaceActorAtCenterOfScreen,
-	DebugMenu,
-	DebugMenuActivate,
 	QuickBehaviourNormal,
 	QuickBehaviourAthletic,
 	QuickBehaviourAggressive,
@@ -152,7 +144,7 @@ public:
 
 	bool isQuickBehaviourActionActive() const;
 	bool isMoveOrTurnActionActive() const;
-	bool isHeroActionActive() const;
+	bool isHeroActionActive() const; // MyFire & F_SPACE
 	bool resetHeroActions();
 
 	/**

@@ -55,7 +55,12 @@ enum QDEngineDebugChannels {
 	kDebugTemp,
 	kDebugQuant,
 	kDebugMinigames,
-	kDebugMovement
+	kDebugMovement,
+	kDebugText,
+};
+
+enum {
+	GF_BROKEN_VIDEOS = 1
 };
 
 class QDEngineEngine : public Engine {
@@ -91,6 +96,7 @@ public:
 	 * Returns the game Id
 	 */
 	Common::String getGameId() const;
+	Common::String getTargetName() const { return _targetName; }
 
 	const char *getExeName() const;
 

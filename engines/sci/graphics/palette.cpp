@@ -27,7 +27,7 @@
 #include "sci/sci.h"
 #include "sci/engine/state.h"
 #include "sci/graphics/cache.h"
-#include "sci/graphics/gfxdrivers.h"
+#include "sci/graphics/drivers/gfxdriver.h"
 #include "sci/graphics/maciconbar.h"
 #include "sci/graphics/palette.h"
 #include "sci/graphics/remap.h"
@@ -426,7 +426,7 @@ void GfxPalette::drewPicture(GuiResourceId pictureId) {
 		_sysPalette.timestamp++;
 
 	if (_palVaryResourceId != -1) {
-		if (g_sci->getEngineState()->gameIsRestarting == 0) // only if not restored nor restarted
+		if (g_sci->getEngineState()->gameIsRestarting == GAMEISRESTARTING_NONE) // only if not restored nor restarted
 			palVaryLoadTargetPalette(pictureId);
 	}
 }

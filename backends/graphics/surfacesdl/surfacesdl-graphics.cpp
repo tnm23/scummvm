@@ -215,6 +215,7 @@ bool SurfaceSdlGraphicsManager::hasFeature(OSystem::Feature f) const {
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 		(f == OSystem::kFeatureFullscreenToggleKeepsContext) ||
 		(f == OSystem::kFeatureStretchMode) ||
+		(f == OSystem::kFeatureRotationMode) ||
 		(f == OSystem::kFeatureVSync) ||
 #endif
 		(f == OSystem::kFeatureCursorPalette) ||
@@ -246,6 +247,9 @@ void SurfaceSdlGraphicsManager::setFeatureState(OSystem::Feature f, bool enable)
 	case OSystem::kFeatureIconifyWindow:
 		if (enable)
 			_window->iconifyWindow();
+		break;
+	case OSystem::kFeatureRotationMode:
+		notifyResize(getWindowWidth(), getWindowHeight());
 		break;
 	default:
 		break;
@@ -923,11 +927,6 @@ void SurfaceSdlGraphicsManager::initGraphicsSurface() {
 	_isDoubleBuf = flags & SDL_DOUBLEBUF;
 	_isHwPalette = flags & SDL_HWPALETTE;
 #endif
-
-#if defined(USE_IMGUI) && SDL_VERSION_ATLEAST(2, 0, 0)
-	// Setup Dear ImGui
-	initImGui(nullptr);
-#endif
 }
 
 bool SurfaceSdlGraphicsManager::loadGFXMode() {
@@ -1319,6 +1318,12 @@ void SurfaceSdlGraphicsManager::internUpdateScreen() {
 	if (_isDoubleBuf && _numDirtyRects)
 		_forceRedraw = true;
 
+#if defined(USE_IMGUI) && defined(USE_IMGUI_SDLRENDERER2)
+	if (_imGuiCallbacks.render) {
+		_forceRedraw = true;
+	}
+#endif
+
 	bool doRedraw = _forceRedraw || (_prevForceRedraw && _isDoubleBuf);
 	int actualDirtyRects = _numDirtyRects;
 	if (_isDoubleBuf && _numPrevDirtyRects > 0) {
@@ -1343,6 +1348,7 @@ void SurfaceSdlGraphicsManager::internUpdateScreen() {
 	}
 
 	// Only draw anything if necessary
+	bool doPresent = false;
 	if (actualDirtyRects > 0 || _cursorNeedsRedraw) {
 		SDL_Rect *r;
 		SDL_Rect dst;
@@ -1521,6 +1527,7 @@ void SurfaceSdlGraphicsManager::internUpdateScreen() {
 		// Finally, blit all our changes to the screen
 		if (!_displayDisabled) {
 			updateScreen(_dirtyRectList, actualDirtyRects);
+			doPresent = true;
 		}
 	}
 
@@ -1532,11 +1539,16 @@ void SurfaceSdlGraphicsManager::internUpdateScreen() {
 	_forceRedraw = false;
 	_cursorNeedsRedraw = false;
 
-#if defined(USE_IMGUI) && SDL_VERSION_ATLEAST(2, 0, 0)
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+
+#if defined(USE_IMGUI) && defined(USE_IMGUI_SDLRENDERER2)
 	renderImGui();
 #endif
 
-#if !SDL_VERSION_ATLEAST(2, 0, 0)
+	if (doPresent) {
+		SDL_RenderPresent(_renderer);
+	}
+#else
 	if (_isDoubleBuf)
 		SDL_Flip(_hwScreen);
 #endif
@@ -2811,7 +2823,7 @@ void SurfaceSdlGraphicsManager::notifyResize(const int width, const int height) 
 
 #if SDL_VERSION_ATLEAST(2, 0, 0)
 void SurfaceSdlGraphicsManager::deinitializeRenderer() {
-#ifdef USE_IMGUI
+#if defined(USE_IMGUI) && defined(USE_IMGUI_SDLRENDERER2)
 	destroyImGui();
 #endif
 
@@ -2895,9 +2907,14 @@ SDL_Surface *SurfaceSdlGraphicsManager::SDL_SetVideoMode(int width, int height, 
 	if (!screen) {
 		deinitializeRenderer();
 		return nullptr;
-	} else {
-		return screen;
 	}
+
+#if defined(USE_IMGUI) && defined(USE_IMGUI_SDLRENDERER2)
+	// Setup Dear ImGui
+	initImGui(_renderer, nullptr);
+#endif
+
+	return screen;
 }
 
 void SurfaceSdlGraphicsManager::SDL_UpdateRects(SDL_Surface *screen, int numrects, SDL_Rect *rects) {
@@ -2908,12 +2925,25 @@ void SurfaceSdlGraphicsManager::SDL_UpdateRects(SDL_Surface *screen, int numrect
 	Common::Rect &drawRect = (_overlayVisible) ? _overlayDrawRect : _gameDrawRect;
 	viewport.x = drawRect.left;
 	viewport.y = drawRect.top;
+
+	int rotation = getRotationMode();
+	int rotangle = 0;
+	if (rotation == Common::kRotation90 || rotation == Common::kRotation270) {
+		int delta = (drawRect.width() - drawRect.height()) / 2;
+		viewport.x = drawRect.top - delta;
+		viewport.y = drawRect.left + delta;
+	}
+	rotangle = rotation;
+
 	viewport.w = drawRect.width();
 	viewport.h = drawRect.height();
 
 	SDL_RenderClear(_renderer);
-	SDL_RenderCopy(_renderer, _screenTexture, nullptr, &viewport);
-	SDL_RenderPresent(_renderer);
+
+	if (rotangle != 0)
+		SDL_RenderCopyEx(_renderer, _screenTexture, nullptr, &viewport, rotangle, nullptr, SDL_FLIP_NONE);
+	else
+		SDL_RenderCopy(_renderer, _screenTexture, nullptr, &viewport);
 }
 
 int SurfaceSdlGraphicsManager::SDL_SetColors(SDL_Surface *surface, SDL_Color *colors, int firstcolor, int ncolors) {
@@ -2945,6 +2975,32 @@ int SurfaceSdlGraphicsManager::SDL_SetAlpha(SDL_Surface *surface, Uint32 flag, U
 int SurfaceSdlGraphicsManager::SDL_SetColorKey(SDL_Surface *surface, Uint32 flag, Uint32 key) {
 	return ::SDL_SetColorKey(surface, flag ? SDL_TRUE : SDL_FALSE, key) ? -1 : 0;
 }
+
+#if defined(USE_IMGUI) && defined(USE_IMGUI_SDLRENDERER2)
+void *SurfaceSdlGraphicsManager::getImGuiTexture(const Graphics::Surface &image, const byte *palette, int palCount) {
+
+	// Upload pixels into texture
+	SDL_Texture *texture = SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_ABGR8888, SDL_TEXTUREACCESS_STATIC, image.w, image.h);
+	if (texture == nullptr) {
+		error("getImGuiTexture: errror creating tetxure: %s", SDL_GetError());
+		return nullptr;
+	}
+
+	Graphics::Surface *s = image.convertTo(Graphics::PixelFormat(4, 8, 8, 8, 8, 0, 8, 16, 24), palette, palCount);
+	SDL_UpdateTexture(texture, nullptr, s->getPixels(), s->pitch);
+	SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
+	SDL_SetTextureScaleMode(texture, SDL_ScaleModeLinear);
+
+	s->free();
+	delete s;
+
+	return (void *)texture;
+}
+
+void SurfaceSdlGraphicsManager::freeImGuiTexture(void *texture) {
+	SDL_DestroyTexture((SDL_Texture *) texture);
+}
+#endif // defined(USE_IMGUI) && defined(USE_IMGUI_SDLRENDERER2)
 
 #endif // SDL_VERSION_ATLEAST(2, 0, 0)
 

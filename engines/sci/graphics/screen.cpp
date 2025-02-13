@@ -34,7 +34,7 @@
 #include "sci/graphics/view.h"
 #include "sci/graphics/palette.h"
 #include "sci/graphics/scifx.h"
-#include "sci/graphics/gfxdrivers.h"
+#include "sci/graphics/drivers/gfxdriver.h"
 
 namespace Sci {
 
@@ -54,15 +54,6 @@ GfxScreen::GfxScreen(ResourceManager *resMan, Common::RenderMode renderMode) : _
 	_curPaletteMapValue = 0;
 	_paletteModsEnabled = false;
 
-	// King's Quest 6 has hires content in the Windows version which we also
-	// allow to be optionally enabled in the DOS version.
-	if (g_sci->getGameId() == GID_KQ6) {
-		if ((g_sci->getPlatform() == Common::kPlatformWindows) ||
-			(g_sci->getPlatform() == Common::kPlatformDOS && g_sci->forceHiresGraphics())) {
-			_upscaledHires = GFX_SCREEN_UPSCALED_640x440;
-		}
-	}
-
 	if (g_sci->getPlatform() == Common::kPlatformMacintosh) {
 		if (getSciVersion() <= SCI_VERSION_01) {
 			// Macintosh SCI0 games used 480x300, while the scripts were running at 320x200
@@ -71,7 +62,7 @@ GfxScreen::GfxScreen(ResourceManager *resMan, Common::RenderMode renderMode) : _
 			_height = 300; // regular visual, priority and control map are 480x300 (this is different than other upscaled SCI games)
 		} else {
 			// Macintosh SCI1/1.1 games use hi-res native fonts if hi-res graphics are enabled
-			if (g_sci->hasMacFonts() && g_sci->forceHiresGraphics()) {
+			if (g_sci->hasMacFonts() && g_sci->useHiresGraphics()) {
 				_upscaledHires = GFX_SCREEN_UPSCALED_640x400;
 			}
 		}
@@ -120,15 +111,6 @@ GfxScreen::GfxScreen(ResourceManager *resMan, Common::RenderMode renderMode) : _
 		for (int i = 0; i <= _scriptWidth; i++)
 			_upscaledWidthMapping[i] = i * 2;
 		break;
-	case GFX_SCREEN_UPSCALED_640x440:
-		// used by King's Quest 6 on Windows
-		_displayWidth = 640;
-		_displayHeight = 440;
-		for (int i = 0; i <= _scriptHeight; i++)
-			_upscaledHeightMapping[i] = (i * 11) / 5;
-		for (int i = 0; i <= _scriptWidth; i++)
-			_upscaledWidthMapping[i] = i * 2;
-		break;
 	default:
 		if (!_displayWidth)
 			_displayWidth = _width;
@@ -146,7 +128,7 @@ GfxScreen::GfxScreen(ResourceManager *resMan, Common::RenderMode renderMode) : _
 		// We add 2 to the height of the icon bar to add a buffer between the screen and the
 		// icon bar (as did the original interpreter).
 		switch (g_sci->getGameId()) {
-		case GID_KQ6: 
+		case GID_KQ6:
 			extraHeight = 26 + 2;
 			break;
 		case GID_FREDDYPHARKAS:
@@ -161,70 +143,7 @@ GfxScreen::GfxScreen(ResourceManager *resMan, Common::RenderMode renderMode) : _
 		}
 	}
 
-	bool enablePaletteMods = ConfMan.hasKey("palette_mods") && ConfMan.getBool("palette_mods");
-	bool requestRGB = enablePaletteMods || (ConfMan.hasKey("rgb_rendering") && ConfMan.getBool("rgb_rendering"));
-
-	_gfxDrv = nullptr;
-	switch (renderMode) {
-	case Common::kRenderCGA:
-		_gfxDrv = new SCI0_CGADriver(false, requestRGB);
-		break;
-	case Common::kRenderCGA_BW:
-		_gfxDrv = new SCI0_CGABWDriver(0xffffff, requestRGB);
-		break;
-	case Common::kRenderHercA:
-	case Common::kRenderHercG:
-		_gfxDrv = new SCI0_HerculesDriver(renderMode == Common::kRenderHercG ? 0x66ff66 : 0xffbf66, requestRGB, false);
-		break;
-	case Common::kRenderEGA:
-		// No support for this mode in the Korean version yet.
-		if (getSciVersion() > SCI_VERSION_1_EGA_ONLY && g_sci->getLanguage() != Common::KO_KOR)
-			_gfxDrv = new SCI1_EGADriver(requestRGB);
-		break;
-	case Common::kRenderVGAGrey:
-		// No support for this mode in the Korean version yet.
-		if (g_sci->getLanguage() != Common::KO_KOR)
-			_gfxDrv = new SCI1_VGAGreyScaleDriver(requestRGB);
-		break;
-	case Common::kRenderPC98_8c:
-		if (g_sci->getGameId() == GID_PQ2)
-			// PQ2 is a bit special, probably the oldest of the PC-98 ports. Unlike all the others, it uses text mode print
-			// and it doesn't even have a 16 colors drivers. See comment below...
-			_gfxDrv = new SCI0_PC98Gfx8ColorsDriver(true, true, requestRGB);
-		else if (getSciVersion() <= SCI_VERSION_01)
-			_gfxDrv = new SCI0_PC98Gfx8ColorsDriver(false, false, requestRGB);
-		else
-			_gfxDrv = new SCI1_PC98Gfx8ColorsDriver(requestRGB);
-		_hiresGlyphBuffer = new byte[16 * 16]();
-		break;
-	default:
-		break;
-	}
-
-	if (_gfxDrv == nullptr) {
-		switch (g_sci->getPlatform()) {
-		case Common::kPlatformPC98:
-			if (g_sci->getGameId() == GID_PQ2)
-				// PQ2 is a bit special, probably the oldest of the PC-98 ports. Unlike all the others, it uses text mode print,
-				// so the text color is a system color outside the normal 16 colors palette. The original does not even have a
-				// 16 colors mode driver. Only the 8 colors mode, where the colors are identical for text and graphics mode.
-				// But we do want to provide the 16 colors mode, since it is not a big deal (i.e., it does not require data
-				// from a driver file and the fat print is also already there for the 8 colors mode). So we just make the
-				// necessary adjustments.
-				_gfxDrv = new PC98Gfx16ColorsDriver(8, false, true, PC98Gfx16ColorsDriver::kFontStyleTextMode, requestRGB, ConfMan.getBool("disable_dithering"));
-			else if (getSciVersion() <= SCI_VERSION_01)
-				_gfxDrv = new PC98Gfx16ColorsDriver(8, false, false, PC98Gfx16ColorsDriver::kFontStyleNone, requestRGB, true);
-			else
-				_gfxDrv = new PC98Gfx16ColorsDriver(1, true, true, PC98Gfx16ColorsDriver::kFontStyleSpecialSCI1, requestRGB, true);
-			break;
-		default:
-			if (g_sci->getLanguage() == Common::KO_KOR)
-				_gfxDrv = new UpscaledGfxDriver(_displayWidth, _displayHeight + extraHeight, 1, true, requestRGB);
-			else // The driver has to be told if is SCI_VERSION_01, since that cannot be determined from the number of colors.
-				_gfxDrv = new GfxDefaultDriver(_displayWidth, _displayHeight + extraHeight, getSciVersion() < SCI_VERSION_01, requestRGB);
-			break;
-		}
-	}
+	_gfxDrv = SciGfxDriver::create(renderMode, _displayWidth, _displayHeight + extraHeight);
 	assert(_gfxDrv);
 
 	// Buffer for rendering a single two-byte character
@@ -238,7 +157,7 @@ GfxScreen::GfxScreen(ResourceManager *resMan, Common::RenderMode renderMode) : _
 	_priorityScreen = (byte *)calloc(_pixels, 1);
 	_controlScreen = (byte *)calloc(_pixels, 1);
 	_displayScreen = (byte *)calloc(_displayPixels, 1);
-	
+
 	// Create a Surface for _displayPixels so that we can draw to it from interfaces
 	// that only draw to Surfaces. Currently that's just Graphics::Font.
 	Graphics::PixelFormat format8 = Graphics::PixelFormat::createFormatCLUT8();
@@ -269,7 +188,7 @@ GfxScreen::GfxScreen(ResourceManager *resMan, Common::RenderMode renderMode) : _
 	}
 
 	// Set up palette mods if requested
-	if (enablePaletteMods)
+	if (ConfMan.hasKey("palette_mods") && ConfMan.getBool("palette_mods"))
 		setupCustomPaletteMods(this);
 
 	// Initialize the actual screen
@@ -347,11 +266,14 @@ void GfxScreen::copyRectToScreen(const Common::Rect &rect) {
  * This copies a rect to screen w/o scaling adjustment and is only meant to be
  * used on hires graphics used in upscaled hires mode.
  */
-void GfxScreen::copyDisplayRectToScreen(const Common::Rect &rect) {
-	if (!_upscaledHires)
-		error("copyDisplayRectToScreen: not in upscaled hires mode");
+void GfxScreen::copyHiResRectToScreen(const byte *srcBuffer, int pitch, int x, int y, int w, int h, const byte *colorMap) {
+	if (!_gfxDrv->supportsHiResGraphics())
+		error("%s(): Hires graphics display is not supported by the active gfx driver", __FUNCTION__);
 
-	displayRect(rect, rect.left, rect.top);
+	_gfxDrv->setFlags(GfxDriver::kHiResMode);
+	_gfxDrv->setColorMap(colorMap);
+	_gfxDrv->copyRectToScreen(srcBuffer, 0, 0, pitch, x, y, w, h, nullptr, nullptr);
+	_gfxDrv->clearFlags(GfxDriver::kHiResMode);
 }
 
 void GfxScreen::copyRectToScreen(const Common::Rect &rect, int16 x, int16 y) {
@@ -619,13 +541,6 @@ int GfxScreen::bitsGetDataSize(Common::Rect rect, byte mask) {
 	if (mask & GFX_SCREEN_MASK_CONTROL) {
 		byteCount += pixels; // _controlScreen
 	}
-	if (mask & GFX_SCREEN_MASK_DISPLAY) {
-		if (!_upscaledHires)
-			error("bitsGetDataSize() called w/o being in upscaled hires mode");
-		byteCount += pixels; // _displayScreen (coordinates actually are given to us for hires displayScreen)
-		if (_paletteMapScreen)
-			byteCount += pixels; // _paletteMapScreen
-	}
 	return byteCount;
 }
 
@@ -644,13 +559,6 @@ void GfxScreen::bitsSave(Common::Rect rect, byte mask, byte *memoryPtr) {
 	}
 	if (mask & GFX_SCREEN_MASK_CONTROL) {
 		bitsSaveScreen(rect, _controlScreen, _width, memoryPtr);
-	}
-	if (mask & GFX_SCREEN_MASK_DISPLAY) {
-		if (!_upscaledHires)
-			error("bitsSave() called w/o being in upscaled hires mode");
-		bitsSaveScreen(rect, _displayScreen, _displayWidth, memoryPtr);
-		if (_paletteMapScreen)
-			bitsSaveScreen(rect, _paletteMapScreen, _displayWidth, memoryPtr);
 	}
 }
 
@@ -708,19 +616,6 @@ void GfxScreen::bitsRestore(const byte *memoryPtr) {
 	}
 	if (mask & GFX_SCREEN_MASK_CONTROL) {
 		bitsRestoreScreen(rect, memoryPtr, _controlScreen, _width);
-	}
-	if (mask & GFX_SCREEN_MASK_DISPLAY) {
-		if (!_upscaledHires)
-			error("bitsRestore() called w/o being in upscaled hires mode");
-		bitsRestoreScreen(rect, memoryPtr, _displayScreen, _displayWidth);
-		if (_paletteMapScreen)
-			bitsRestoreScreen(rect, memoryPtr, _paletteMapScreen, _displayWidth);
-
-		// WORKAROUND - we are not sure what sierra is doing. If we don't do this here, portraits won't get fully removed
-		//  from screen. Some lowres showBits() call is used for that and it's not covering the whole area
-		//  We would need to find out inside the kq6 windows interpreter, but this here works already and seems not to have
-		//  any side-effects. The whole hires is hacked into the interpreter, so maybe this is even right.
-		copyDisplayRectToScreen(rect);
 	}
 }
 
@@ -898,7 +793,7 @@ void GfxScreen::debugShowMap(int mapNo) {
 }
 
 void GfxScreen::scale2x(const SciSpan<const byte> &src, SciSpan<byte> &dst, int16 srcWidth, int16 srcHeight, byte bytesPerPixel) {
-	assert(bytesPerPixel == 1 || bytesPerPixel == 2);
+	assert(bytesPerPixel == 1 || bytesPerPixel == 2 || bytesPerPixel == 3 || bytesPerPixel == 4);
 	const int newWidth = srcWidth * 2;
 	const int pitch = newWidth * bytesPerPixel;
 	const byte *srcPtr = src.getUnsafeDataAt(0, srcWidth * srcHeight * bytesPerPixel);
@@ -919,17 +814,48 @@ void GfxScreen::scale2x(const SciSpan<const byte> &src, SciSpan<byte> &dst, int1
 	} else if (bytesPerPixel == 2) {
 		for (int y = 0; y < srcHeight; y++) {
 			for (int x = 0; x < srcWidth; x++) {
+				const uint16 color = *(const uint16 *)srcPtr;
+				*(uint16 *)(dstPtr + 0) = color;
+				*(uint16 *)(dstPtr + 2) = color;
+				*(uint16 *)(dstPtr + pitch + 0) = color;
+				*(uint16 *)(dstPtr + pitch + 2) = color;
+				srcPtr += 2;
+				dstPtr += 4;
+			}
+			dstPtr += pitch;
+		}
+	} else if (bytesPerPixel == 3) {
+		for (int y = 0; y < srcHeight; y++) {
+			for (int x = 0; x < srcWidth; x++) {
 				const byte color = *srcPtr++;
 				const byte color2 = *srcPtr++;
+				const byte color3 = *srcPtr++;
 				dstPtr[0] = color;
 				dstPtr[1] = color2;
-				dstPtr[2] = color;
-				dstPtr[3] = color2;
+				dstPtr[2] = color3;
+				dstPtr[3] = color;
+				dstPtr[4] = color2;
+				dstPtr[5] = color3;
 				dstPtr[pitch] = color;
 				dstPtr[pitch + 1] = color2;
-				dstPtr[pitch + 2] = color;
-				dstPtr[pitch + 3] = color2;
-				dstPtr += 4;
+				dstPtr[pitch + 2] = color3;
+				dstPtr[pitch + 3] = color;
+				dstPtr[pitch + 4] = color2;
+				dstPtr[pitch + 5] = color3;
+				dstPtr += 6;
+			}
+			dstPtr += pitch;
+		}
+	} else if (bytesPerPixel == 4) {
+		for (int y = 0; y < srcHeight; y++) {
+			for (int x = 0; x < srcWidth; x++) {
+				const uint32 color = *(const uint32 *)srcPtr;
+				*(uint32 *)(dstPtr + 0) = color;
+				*(uint32 *)(dstPtr + 4) = color;
+				*(uint32 *)(dstPtr + pitch + 0) = color;
+				*(uint32 *)(dstPtr + pitch + 4) = color;
+				srcPtr += 4;
+				dstPtr += 8;
 			}
 			dstPtr += pitch;
 		}
@@ -950,10 +876,6 @@ void GfxScreen::adjustBackUpscaledCoordinates(int16 &y, int16 &x) {
 	case GFX_SCREEN_UPSCALED_640x400:
 		x /= 2;
 		y /= 2;
-		break;
-	case GFX_SCREEN_UPSCALED_640x440:
-		x /= 2;
-		y = (y * 5) / 11;
 		break;
 	default:
 		break;
@@ -984,7 +906,7 @@ void GfxScreen::grabPalette(byte *buffer, uint start, uint num) const {
 
 void GfxScreen::setPalette(const byte *buffer, uint start, uint num, bool update) {
 	assert(start + num <= 256);
-	_gfxDrv->setPalette(buffer, start, num, update, _paletteModsEnabled ? _paletteMods : nullptr, _paletteMapScreen);	
+	_gfxDrv->setPalette(buffer, start, num, update, _paletteModsEnabled ? _paletteMods : nullptr, _paletteMapScreen);
 }
 
 

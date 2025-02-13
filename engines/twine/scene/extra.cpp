@@ -20,7 +20,6 @@
  */
 
 #include "twine/scene/extra.h"
-#include "common/memstream.h"
 #include "common/util.h"
 #include "twine/audio/sound.h"
 #include "twine/input.h"
@@ -94,7 +93,7 @@ int32 Extra::extraSearch(int32 actorIdx, int32 x, int32 y, int32 z, int32 sprite
 		extra->destPos.z = maxSpeed;
 		extra->strengthOfHit = strengthOfHit;
 
-		_engine->_movements->setActorAngle(LBAAngles::ANGLE_0, maxSpeed, LBAAngles::ANGLE_17, &extra->trackActorMove);
+		_engine->_movements->initRealValue(LBAAngles::ANGLE_0, maxSpeed, LBAAngles::ANGLE_17, &extra->trackActorMove);
 		const ActorStruct *actor = _engine->_scene->getActor(targetActor);
 		extra->angle = _engine->_movements->getAngle(extra->pos, actor->posObj());
 		return i;
@@ -122,7 +121,7 @@ int32 Extra::addExtraExplode(int32 x, int32 y, int32 z) {
 	return -1;
 }
 
-void Extra::resetExtras() {
+void Extra::clearExtra() {
 	for (int32 i = 0; i < EXTRA_MAX_ENTRIES; i++) {
 		ExtraListStruct *extra = &_extraList[i];
 		extra->sprite = -1;
@@ -290,7 +289,7 @@ int32 Extra::addExtraAiming(int32 actorIdx, int32 x, int32 y, int32 z, int32 spr
 		extra->spawnTime = targetActorIdx;
 		extra->destPos.z = finalAngle;
 		extra->strengthOfHit = strengthOfHit;
-		_engine->_movements->setActorAngle(LBAAngles::ANGLE_0, finalAngle, LBAAngles::ANGLE_17, &extra->trackActorMove);
+		_engine->_movements->initRealValue(LBAAngles::ANGLE_0, finalAngle, LBAAngles::ANGLE_17, &extra->trackActorMove);
 		const ActorStruct *actor = _engine->_scene->getActor(targetActorIdx);
 		extra->angle = _engine->_movements->getAngle(extra->pos, actor->posObj());
 
@@ -326,7 +325,7 @@ int32 Extra::extraSearchKey(int32 actorIdx, int32 x, int32 y, int32 z, int32 spr
 		extra->payload.extraIdx = extraIdx;
 		extra->destPos.z = 4000;
 		extra->strengthOfHit = 0;
-		_engine->_movements->setActorAngle(LBAAngles::ANGLE_0, 4000, LBAAngles::ANGLE_17, &extra->trackActorMove);
+		_engine->_movements->initRealValue(LBAAngles::ANGLE_0, 4000, LBAAngles::ANGLE_17, &extra->trackActorMove);
 		extra->angle = _engine->_movements->getAngle(extra->pos, _extraList[extraIdx].pos);
 
 		return i;
@@ -501,7 +500,7 @@ void Extra::gereExtras() {
 		const int32 deltaT = _engine->timerRef - extra->spawnTime;
 
 		if (extra->type & ExtraType::EXPLOSION) {
-			extra->sprite = _engine->_collision->boundRuleThree(SPRITEHQR_EXPLOSION_FIRST_FRAME, 100, 30, deltaT);
+			extra->sprite = boundRuleThree(SPRITEHQR_EXPLOSION_FIRST_FRAME, 100, 30, deltaT);
 			continue;
 		}
 		// process extra moving
@@ -591,7 +590,7 @@ void Extra::gereExtras() {
 			extra->pos.x += destPos.x;
 			extra->pos.z += destPos.y;
 
-			_engine->_movements->setActorAngle(LBAAngles::ANGLE_0, extra->destPos.z, LBAAngles::ANGLE_17, &extra->trackActorMove);
+			_engine->_movements->initRealValue(LBAAngles::ANGLE_0, extra->destPos.z, LBAAngles::ANGLE_17, &extra->trackActorMove);
 
 			if (actorIdxAttacked == _engine->_collision->extraCheckObjCol(extra, actorIdx)) {
 				if (i == _engine->_gameState->_magicBall) {
@@ -611,7 +610,7 @@ void Extra::gereExtras() {
 			const int32 angle = ClampAngle(tmpAngle - extra->angle);
 
 			if (angle > LBAAngles::ANGLE_140 && angle < LBAAngles::ANGLE_210) {
-				_engine->_sound->playSample(Samples::ItemFound, 1, _engine->_scene->_sceneHero->posObj(), OWN_ACTOR_SCENE_INDEX);
+				_engine->_sound->playSample(Samples::ItemFound, 0x1000, 1, _engine->_scene->_sceneHero->posObj(), OWN_ACTOR_SCENE_INDEX);
 
 				if (extraKey->info1 > 1) {
 					const IVec3 &projPos = _engine->_renderer->projectPoint(extraKey->pos - _engine->_grid->_worldCube);
@@ -641,10 +640,10 @@ void Extra::gereExtras() {
 			extra->pos.x += destPos.x;
 			extra->pos.z += destPos.y;
 
-			_engine->_movements->setActorAngle(LBAAngles::ANGLE_0, extra->destPos.z, LBAAngles::ANGLE_17, &extra->trackActorMove);
+			_engine->_movements->initRealValue(LBAAngles::ANGLE_0, extra->destPos.z, LBAAngles::ANGLE_17, &extra->trackActorMove);
 
 			if (extraIdx == _engine->_collision->extraCheckExtraCol(extra, _engine->_gameState->_magicBall)) {
-				_engine->_sound->playSample(Samples::ItemFound, 1, _engine->_scene->_sceneHero->posObj(), OWN_ACTOR_SCENE_INDEX);
+				_engine->_sound->playSample(Samples::ItemFound, 0x1000, 1, _engine->_scene->_sceneHero->posObj(), OWN_ACTOR_SCENE_INDEX);
 
 				if (extraKey->info1 > 1) {
 					const IVec3 &projPos = _engine->_renderer->projectPoint(extraKey->pos - _engine->_grid->_worldCube);
@@ -721,7 +720,8 @@ void Extra::gereExtras() {
 				}
 				// if extra is magic ball
 				if (i == _engine->_gameState->_magicBall) {
-					_engine->_sound->playSample(Samples::Hit, 1, extra->pos);
+					const uint16 pitchBend = 0x1000 + _engine->getRandomNumber(300) - 150;
+					_engine->_sound->playSample(Samples::Hit, pitchBend, 1, extra->pos);
 
 					// can't bounce with not magic points
 					if (_engine->_gameState->_magicBallType <= 0) {
@@ -792,7 +792,7 @@ void Extra::gereExtras() {
 		if ((extra->type & ExtraType::TAKABLE) && !(extra->type & ExtraType::FLY)) {
 			// if hero touch extra
 			if (_engine->_collision->extraCheckObjCol(extra, -1) == 0) {
-				_engine->_sound->playSample(Samples::ItemFound, 1, extra->pos);
+				_engine->_sound->playSample(Samples::ItemFound, 0x1000, 1, extra->pos);
 
 				if (extra->info1 > 1) {
 					const IVec3 &projPos = _engine->_renderer->projectPoint(extra->pos - _engine->_grid->_worldCube);

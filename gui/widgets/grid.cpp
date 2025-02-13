@@ -50,6 +50,7 @@ void GridItemWidget::updateThumb() {
 	const Graphics::ManagedSurface *gfx = _grid->filenameToSurface(_activeEntry->thumbPath);
 	_thumbGfx.free();
 	if (gfx) {
+		// TODO: Use a reference instead of copying the surface
 		_thumbGfx.copyFrom(*gfx);
 		_thumbAlpha = _thumbGfx.detectAlpha();
 	}
@@ -714,7 +715,10 @@ void GridWidget::reloadThumbnails() {
 					surf = loadSurfaceFromFile(path);
 				} else {
 					const Graphics::ManagedSurface *scSurf = _loadedSurfaces[path];
-					_loadedSurfaces[entry->thumbPath] = new Graphics::ManagedSurface(*scSurf);
+					// TODO: Use SharedPtr instead of duplicating the surface
+					Graphics::ManagedSurface *thSurf = new Graphics::ManagedSurface();
+					thSurf->copyFrom(*scSurf);
+					_loadedSurfaces[entry->thumbPath] = thSurf;
 				}
 			}
 
@@ -723,7 +727,10 @@ void GridWidget::reloadThumbnails() {
 				_loadedSurfaces[entry->thumbPath] = scSurf;
 
 				if (path != entry->thumbPath) {
-					_loadedSurfaces[path] = new Graphics::ManagedSurface(*scSurf);
+					// TODO: Use SharedPtr instead of duplicating the surface
+					Graphics::ManagedSurface *thSurf = new Graphics::ManagedSurface();
+					thSurf->copyFrom(*scSurf);
+					_loadedSurfaces[path] = thSurf;
 				}
 
 				if (surf != scSurf) {
@@ -1103,12 +1110,6 @@ void GridWidget::reflowLayout() {
 	}
 	scrollBarRecalc();
 	markAsDirty();
-}
-
-void GridWidget::openTray(int x, int y, int entryId) {
-	GridItemTray *tray = new GridItemTray(this, x - _gridXSpacing / 3, y, _gridItemWidth + 2 * (_gridXSpacing / 3), _trayHeight, entryId, this);
-	tray->runModal();
-	delete tray;
 }
 
 void GridWidget::openTrayAtSelected() {

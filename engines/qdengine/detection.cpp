@@ -25,7 +25,6 @@
 #include "common/file.h"
 #include "common/md5.h"
 #include "common/str-array.h"
-#include "common/translation.h"
 #include "common/util.h"
 
 #include "engines/advancedDetector.h"
@@ -45,6 +44,7 @@ static const DebugChannelDef debugFlagList[] = {
 	{ QDEngine::kDebugTemp, "temp", "Enable temporary tracing" },
 	{ QDEngine::kDebugQuant, "quant", "Enable quant tracing"},
 	{ QDEngine::kDebugMinigames, "minigames", "Enable minigames tracing"},
+	{ QDEngine::kDebugText, "text", "Enable text tracing"},
 	DEBUG_CHANNEL_END
 };
 
@@ -52,6 +52,7 @@ class QDEngineMetaEngineDetection : public AdvancedMetaEngineDetection<ADGameDes
 
 public:
 	QDEngineMetaEngineDetection() : AdvancedMetaEngineDetection(QDEngine::GAME_DESCRIPTIONS, QDEngine::GAME_NAMES) {
+		_flags = kADFlagMatchFullPaths;
 	}
 
 	~QDEngineMetaEngineDetection() override {}

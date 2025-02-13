@@ -30,8 +30,8 @@ namespace Riddle {
 namespace Rooms {
 
 void Room352::preload() {
-	_G(player).walker_type = 0;
-	_G(player).shadow_type = 0;
+	_G(player).walker_type = WALKER_PLAYER;
+	_G(player).shadow_type = SHADOW_PLAYER;
 	LoadWSAssets("OTHER SCRIPT");
 }
 
@@ -40,7 +40,7 @@ void Room352::init() {
 	AddSystemHotkey(KEY_ESCAPE, escapeKeyPressed);
 	_G(kernel).call_daemon_every_loop = true;
 
-	ws_demand_location(584, 334, 3);
+	ws_demand_location(_G(my_walker), 584, 334, 3);
 	ws_hide_walker();
 	player_set_commands_allowed(false);
 	_val1 = 0;
@@ -96,11 +96,11 @@ void Room352::daemon() {
 		_meiChecksShoe = series_stream("mei checks her shoe", 7, 0, -1);
 		series_stream_break_on_frame(_meiChecksShoe, 47, 17);
 		ws_unhide_walker();
-		ws_walk(319, 301, nullptr, 20, 1);
+		ws_walk(_G(my_walker), 319, 301, nullptr, 20, 1);
 		break;
 
 	case 17:
-		series_stream_check_series(_meiChecksShoe, 3000);
+		series_set_frame_rate(_meiChecksShoe, 3000);
 		break;
 
 	case 20:
@@ -111,9 +111,9 @@ void Room352::daemon() {
 
 		series_ranged_play_xy("rip suit reaches for door", 1, 0, 0, 4,
 			_playerX, _playerY, _playerScale, 0, 6, 21);
-		series_ranged_play_xy("ripsh1", -1, 0, 0, 0,
+		_ripsh1 = series_ranged_play_xy("ripsh1", -1, 0, 0, 0,
 			_playerX, _playerY, _playerScale, 0, 3000, -1);
-		sendWSMessage_60000(_ripsh1);
+		sendWSMessage_60000(_G(my_walker));
 		digi_play("352_s02", 1);
 		break;
 
@@ -159,7 +159,7 @@ void Room352::daemon() {
 		break;
 
 	case 24:
-		series_ranged_play_xy("rip turns from door", 1, 0, 0, 6,
+		series_ranged_play_xy("rip turns from door talks", 1, 0, 0, 6,
 			_playerX, _playerY, _playerScale, 0, 5, 113);
 		digi_play("352r01", 1, 255, 111);
 		break;

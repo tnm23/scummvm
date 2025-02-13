@@ -1478,9 +1478,12 @@ bool Control::driveSpaceAvailable() {
 
 	outf->finalize();
 
-	if (outf->err())
+	if (outf->err()) {
+		delete outf;
 		return false;
+	}
 
+	delete outf;
 	return true;
 }
 
@@ -3353,7 +3356,7 @@ const uint8 Control::_polishTranslationLanguageStrings[20][43] = {
 	"Nowa gra",                                    // "Restart",
 	"Start",                                       // "Start",
 	"Wyjd\xBC",                                    // "Quit",
-	"Pr\xEA""dko\xB6\xE6",                         // "Speed", the double pair of "" is to avoid escaping the d after \xEA
+	("Pr\xEA""dko\xB6\xE6"),                       // "Speed", the double pair of "" is to avoid escaping the d after \xEA
 	"G\xB3o\xB6no\xB6\xE6",                        // "Volume",
 	"Napisy",                                      // "Text",
 	"Gotowe",                                      // "Done",
