@@ -237,6 +237,7 @@ ActionDelayRender::ActionDelayRender(ZVision *engine, int32 slotKey, const Commo
 }
 
 bool ActionDelayRender::execute() {
+  debug(2,"Executing Action: DelayRender");
 	_engine->setRenderDelay(_framesToDelay);
 	return true;
 }
@@ -990,7 +991,8 @@ bool ActionStreamVideo::execute() {
 	if (_scriptManager->getStateValue(StateKey_MPEGMovies) == 1 &&_engine->getSearchManager()->hasFile(hiresPath)) {
 		_fileName = hiresPath;
 		switchToHires = true;
-	} else if (!_engine->getSearchManager()->hasFile(_fileName))
+	} 
+	else if (!_engine->getSearchManager()->hasFile(_fileName))
 		return true;
 #else
 	if (!_engine->getSearchManager()->hasFile(_fileName))
@@ -999,9 +1001,7 @@ bool ActionStreamVideo::execute() {
 
 	decoder = _engine->loadAnimation(_fileName);
 	uint16 sub = (subtitleExists) ? _engine->getSubtitleManager()->create(subpath, switchToHires) : 0;
-	
 	_engine->getCursorManager()->showMouse(false);
-
 	if (switchToHires) {
 		_engine->getRenderManager()->initialize(true);
     srcRect = Common::Rect(Common::Point(0,69),720, 344);
@@ -1030,6 +1030,7 @@ bool ActionStreamVideo::execute() {
 		_engine->getRenderManager()->initialize(false);
 	_engine->getCursorManager()->showMouse(true);
   _engine->getSubtitleManager()->destroy(sub);
+  _scriptManager->justStreamedVideo();
   debug(2,"Completed executing video stream");
 	return true;
 }
